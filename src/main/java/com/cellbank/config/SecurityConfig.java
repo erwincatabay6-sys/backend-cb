@@ -76,6 +76,26 @@ public class SecurityConfig {
                                 "TECHNICIAN",
                                 "FRONT_DESK"
                         )
+                        
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/auth/me"
+                        )
+                        
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/change-password"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
 
                         .requestMatchers("/api/users/**")
                         .hasRole("ADMIN")
