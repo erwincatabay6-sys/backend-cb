@@ -96,6 +96,26 @@ public class SecurityConfig {
                                 "TECHNICIAN",
                                 "FRONT_DESK"
                         )
+                        
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/auth/me/profile-image"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/me/profile-image"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
 
                         .requestMatchers("/api/users/**")
                         .hasRole("ADMIN")
