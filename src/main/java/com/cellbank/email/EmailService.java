@@ -23,7 +23,7 @@ public class EmailService {
 
         SimpleMailMessage message = new SimpleMailMessage();
 
-        message.setFrom(senderAddress);
+        message.setFrom("Cellbank <" + senderAddress + ">");
         message.setTo(recipient);
         message.setSubject(subject);
         message.setText(body);
