@@ -116,6 +116,34 @@ public class SecurityConfig {
                                 "TECHNICIAN",
                                 "FRONT_DESK"
                         )
+                        
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/auth/me/email-verification"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+                        
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/me/email-verification"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/verify-email"
+                        )
+                               
+                        
+                        .permitAll()
 
                         .requestMatchers("/api/users/**")
                         .hasRole("ADMIN")
