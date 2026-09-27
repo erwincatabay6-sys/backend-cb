@@ -1,9 +1,11 @@
 package com.cellbank.auth;
 
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
 
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -12,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import jakarta.persistence.EntityManager;
 
 @Service
 public class StaffAccountService {
@@ -21,7 +24,9 @@ public class StaffAccountService {
             "TECHNICIAN",
             "FRONT_DESK"
     );
-
+    
+    private final PasswordResetTokenRepository tokenRepository;
+    private final EntityManager entityManager;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
@@ -31,12 +36,16 @@ public class StaffAccountService {
             UserRepository userRepository,
             RoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
-            SessionInvalidationService sessionInvalidationService) {
+            SessionInvalidationService sessionInvalidationService,
+            PasswordResetTokenRepository tokenRepository,
+            EntityManager entityManager) {
 
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.sessionInvalidationService = sessionInvalidationService;
+        this.tokenRepository = tokenRepository;
+        this.entityManager = entityManager;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -155,11 +164,13 @@ public class StaffAccountService {
             Long userId,
             UpdateStaffAccountRequest request) {
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Staff account was not found."
-                ));
+    	User user = userRepository.findByIdForUpdate(userId)
+    	        .orElseThrow(() -> new ResponseStatusException(
+    	                HttpStatus.NOT_FOUND,
+    	                "Staff account was not found."
+    	        ));
+
+    	entityManager.refresh(user);
 
         String name = request.name().strip();
         String username = request.username().strip();
@@ -218,6 +229,7 @@ public class StaffAccountService {
 
         if (emailChanged) {
             user.setEmailVerified(false);
+            invalidateUnusedResetTokens(user.getId());
         }
 
         User savedUser = userRepository.saveAndFlush(user);
@@ -314,11 +326,13 @@ public class StaffAccountService {
             Long userId,
             UpdateStaffAccessRequest request) {
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Staff account was not found."
-                ));
+    	User user = userRepository.findByIdForUpdate(userId)
+    	        .orElseThrow(() -> new ResponseStatusException(
+    	                HttpStatus.NOT_FOUND,
+    	                "Staff account was not found."
+    	        ));
+
+    	entityManager.refresh(user);
 
         boolean active = request.active();
 
@@ -335,6 +349,10 @@ public class StaffAccountService {
         user.setStatus(
                 active ? UserStatus.ACTIVE : UserStatus.INACTIVE
         );
+        
+        if (!active) {
+            invalidateUnusedResetTokens(user.getId());
+        }
 
         User savedUser = userRepository.saveAndFlush(user);
 
@@ -345,6 +363,13 @@ public class StaffAccountService {
         }
 
         return toResponse(savedUser);
+    }
+    private void invalidateUnusedResetTokens(Long userId) {
+
+        Instant now = Instant.now();
+
+        tokenRepository.findAllByUserIdAndUsedAtIsNull(userId)
+                .forEach(token -> token.markUsed(now));
     }
 }
 
