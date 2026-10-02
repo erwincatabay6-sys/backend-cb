@@ -1,11 +1,12 @@
 package com.cellbank.auth;
 
-import java.time.Instant;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import jakarta.persistence.EntityManager;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -14,7 +15,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import jakarta.persistence.EntityManager;
 
 @Service
 public class StaffAccountService {
@@ -24,13 +24,14 @@ public class StaffAccountService {
             "TECHNICIAN",
             "FRONT_DESK"
     );
-    
-    private final PasswordResetTokenRepository tokenRepository;
-    private final EntityManager entityManager;
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final SessionInvalidationService sessionInvalidationService;
+    private final PasswordResetTokenRepository tokenRepository;
+    private final EntityManager entityManager;
+    private final EmailVerificationTokenRepository verificationTokenRepository;
 
     public StaffAccountService(
             UserRepository userRepository,
@@ -38,7 +39,8 @@ public class StaffAccountService {
             PasswordEncoder passwordEncoder,
             SessionInvalidationService sessionInvalidationService,
             PasswordResetTokenRepository tokenRepository,
-            EntityManager entityManager) {
+            EntityManager entityManager,
+            EmailVerificationTokenRepository verificationTokenRepository) {
 
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -46,7 +48,12 @@ public class StaffAccountService {
         this.sessionInvalidationService = sessionInvalidationService;
         this.tokenRepository = tokenRepository;
         this.entityManager = entityManager;
+        this.verificationTokenRepository = verificationTokenRepository;
     }
+
+    // -----------------------------
+    // LIST STAFF ACCOUNTS
+    // -----------------------------
 
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
@@ -57,6 +64,10 @@ public class StaffAccountService {
                 .map(this::toResponse)
                 .toList();
     }
+
+    // -----------------------------
+    // CREATE STAFF ACCOUNT
+    // -----------------------------
 
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional
@@ -107,70 +118,23 @@ public class StaffAccountService {
         return toResponse(savedUser);
     }
 
-    private Set<Role> resolveRolesForCreation(
-            Set<String> requestedRoles) {
+    // -----------------------------
+    // UPDATE STAFF ACCOUNT
+    // -----------------------------
 
-        if (requestedRoles == null || requestedRoles.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "At least one role is required."
-            );
-        }
-
-        for (String roleName : requestedRoles) {
-            if (roleName == null || !ALLOWED_ROLES.contains(roleName)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "One or more roles are invalid."
-                );
-            }
-        }
-
-        if (requestedRoles.contains("ADMIN")) {
-
-            if (requestedRoles.size() != 1) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "ADMIN cannot be combined with another role."
-                );
-            }
-
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "The administrator account is created during initial "
-                            + "setup. Additional administrators are not allowed."
-            );
-        }
-
-        Set<Role> roles = new HashSet<>();
-
-        for (String roleName : requestedRoles) {
-
-            Role role = roleRepository.findByName(roleName)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.INTERNAL_SERVER_ERROR,
-                            "A required staff role is not configured."
-                    ));
-
-            roles.add(role);
-        }
-
-        return roles;
-    }
-    
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public StaffAccountResponse updateStaffAccount(
             Long userId,
             UpdateStaffAccountRequest request) {
 
-    	User user = userRepository.findByIdForUpdate(userId)
-    	        .orElseThrow(() -> new ResponseStatusException(
-    	                HttpStatus.NOT_FOUND,
-    	                "Staff account was not found."
-    	        ));
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Staff account was not found."
+                ));
 
-    	entityManager.refresh(user);
+        entityManager.refresh(user);
 
         String name = request.name().strip();
         String username = request.username().strip();
@@ -229,7 +193,7 @@ public class StaffAccountService {
 
         if (emailChanged) {
             user.setEmailVerified(false);
-            invalidateUnusedResetTokens(user.getId());
+            invalidateUnusedAccountTokens(user.getId());
         }
 
         User savedUser = userRepository.saveAndFlush(user);
@@ -242,7 +206,115 @@ public class StaffAccountService {
 
         return toResponse(savedUser);
     }
-    
+
+    // -----------------------------
+    // UPDATE STAFF ACCESS
+    // -----------------------------
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional
+    public StaffAccountResponse updateStaffAccess(
+            Long userId,
+            UpdateStaffAccessRequest request) {
+
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Staff account was not found."
+                ));
+
+        entityManager.refresh(user);
+
+        boolean active = request.active();
+
+        boolean administrator = user.getRoles().stream()
+                .anyMatch(role -> "ADMIN".equals(role.getName()));
+
+        if (!active && administrator) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The administrator account cannot be deactivated."
+            );
+        }
+
+        user.setStatus(
+                active ? UserStatus.ACTIVE : UserStatus.INACTIVE
+        );
+
+        if (!active) {
+            invalidateUnusedAccountTokens(user.getId());
+        }
+
+        User savedUser = userRepository.saveAndFlush(user);
+
+        if (!active) {
+            sessionInvalidationService.expireSessionsAfterCommit(
+                    savedUser.getUsername()
+            );
+        }
+
+        return toResponse(savedUser);
+    }
+
+    // -----------------------------
+    // ROLE VALIDATION FOR CREATION
+    // -----------------------------
+
+    private Set<Role> resolveRolesForCreation(
+            Set<String> requestedRoles) {
+
+        if (requestedRoles == null || requestedRoles.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "At least one role is required."
+            );
+        }
+
+        for (String roleName : requestedRoles) {
+            if (roleName == null || !ALLOWED_ROLES.contains(roleName)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "One or more roles are invalid."
+                );
+            }
+        }
+
+        if (requestedRoles.contains("ADMIN")) {
+
+            if (requestedRoles.size() != 1) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "ADMIN cannot be combined with another role."
+                );
+            }
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The administrator account is created during initial "
+                            + "setup. Additional administrators are not allowed."
+            );
+        }
+
+        Set<Role> roles = new HashSet<>();
+
+        for (String roleName : requestedRoles) {
+
+            Role role = roleRepository.findByName(roleName)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.INTERNAL_SERVER_ERROR,
+                            "A required staff role is not configured."
+                    ));
+
+            roles.add(role);
+        }
+
+        return roles;
+    }
+
+    // -----------------------------
+    // ROLE VALIDATION FOR UPDATES
+    // -----------------------------
+
     private Set<Role> resolveRolesForUpdate(
             Set<String> previousRoles,
             Set<String> requestedRoles) {
@@ -303,6 +375,25 @@ public class StaffAccountService {
         return roles;
     }
 
+    // -----------------------------
+    // INVALIDATE ACCOUNT TOKENS
+    // -----------------------------
+
+    private void invalidateUnusedAccountTokens(Long userId) {
+
+        Instant now = Instant.now();
+
+        tokenRepository.findAllByUserIdAndUsedAtIsNull(userId)
+                .forEach(token -> token.markUsed(now));
+
+        verificationTokenRepository.findAllByUserIdAndUsedAtIsNull(userId)
+                .forEach(token -> token.markUsed(now));
+    }
+
+    // -----------------------------
+    // RESPONSE MAPPING
+    // -----------------------------
+
     private StaffAccountResponse toResponse(User user) {
 
         List<String> roleNames = user.getRoles()
@@ -320,57 +411,4 @@ public class StaffAccountService {
                 user.getStatus()
         );
     }
-    @PreAuthorize("hasRole('ADMIN')")
-    @Transactional
-    public StaffAccountResponse updateStaffAccess(
-            Long userId,
-            UpdateStaffAccessRequest request) {
-
-    	User user = userRepository.findByIdForUpdate(userId)
-    	        .orElseThrow(() -> new ResponseStatusException(
-    	                HttpStatus.NOT_FOUND,
-    	                "Staff account was not found."
-    	        ));
-
-    	entityManager.refresh(user);
-
-        boolean active = request.active();
-
-        boolean administrator = user.getRoles().stream()
-                .anyMatch(role -> "ADMIN".equals(role.getName()));
-
-        if (!active && administrator) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "The administrator account cannot be deactivated."
-            );
-        }
-
-        user.setStatus(
-                active ? UserStatus.ACTIVE : UserStatus.INACTIVE
-        );
-        
-        if (!active) {
-            invalidateUnusedResetTokens(user.getId());
-        }
-
-        User savedUser = userRepository.saveAndFlush(user);
-
-        if (!active) {
-            sessionInvalidationService.expireSessionsAfterCommit(
-                    savedUser.getUsername()
-            );
-        }
-
-        return toResponse(savedUser);
-    }
-    private void invalidateUnusedResetTokens(Long userId) {
-
-        Instant now = Instant.now();
-
-        tokenRepository.findAllByUserIdAndUsedAtIsNull(userId)
-                .forEach(token -> token.markUsed(now));
-    }
 }
-
-

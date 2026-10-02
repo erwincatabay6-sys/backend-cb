@@ -1,5 +1,10 @@
 package com.cellbank.config;
 
+
+import com.cellbank.auth.AuthRateLimitFilter;
+import com.cellbank.auth.AuthRateLimitService;
+
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import jakarta.servlet.DispatcherType;
 
 import org.springframework.context.annotation.Bean;
@@ -34,10 +39,16 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            SessionRegistry sessionRegistry) throws Exception {
+            SessionRegistry sessionRegistry,
+            AuthRateLimitService authRateLimitService) throws Exception {
 
         http
                 .csrf(Customizer.withDefaults())
+                
+                .addFilterBefore(
+                        new AuthRateLimitFilter(authRateLimitService),
+                        UsernamePasswordAuthenticationFilter.class
+                )
 
                 .httpBasic(AbstractHttpConfigurer::disable)
 

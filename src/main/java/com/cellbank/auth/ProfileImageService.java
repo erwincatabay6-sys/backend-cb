@@ -2,6 +2,8 @@ package com.cellbank.auth;
 
 import java.util.UUID;
 
+import jakarta.persistence.EntityManager;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,27 +17,48 @@ public class ProfileImageService {
     private final UserProfileImageRepository imageRepository;
     private final ProfileImageProcessor imageProcessor;
     private final CurrentUserService currentUserService;
+    private final EntityManager entityManager;
 
     public ProfileImageService(
             UserRepository userRepository,
             UserProfileImageRepository imageRepository,
             ProfileImageProcessor imageProcessor,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            EntityManager entityManager) {
 
         this.userRepository = userRepository;
         this.imageRepository = imageRepository;
         this.imageProcessor = imageProcessor;
         this.currentUserService = currentUserService;
+        this.entityManager = entityManager;
     }
+
+    // -----------------------------
+    // UPLOAD PROFILE IMAGE
+    // -----------------------------
 
     @Transactional
     public CurrentUserResponse upload(
             String username,
             MultipartFile file) {
 
-        User user = findActiveUser(username);
+        User existingUser = findActiveUser(username);
 
+        // Process the image before taking the account lock.
         byte[] imageData = imageProcessor.process(file);
+
+        User user = userRepository
+                .findByIdForUpdate(existingUser.getId())
+                .orElseThrow(this::unauthorized);
+
+        // Reload the latest account data after obtaining the lock.
+        entityManager.refresh(user);
+
+        if (!user.getUsername().equalsIgnoreCase(username)) {
+            throw unauthorized();
+        }
+
+        requireActive(user);
 
         UserProfileImage image = imageRepository
                 .findById(user.getId())
@@ -46,18 +69,20 @@ public class ProfileImageService {
                 ));
 
         image.replaceImage(imageData, "image/png");
-
         imageRepository.save(image);
 
         String imageUrl = "/api/auth/me/profile-image?v="
                 + UUID.randomUUID();
 
         user.setProfileImageUrl(imageUrl);
-
         userRepository.save(user);
 
         return currentUserService.getCurrentUser(user.getUsername());
     }
+
+    // -----------------------------
+    // READ PROFILE IMAGE
+    // -----------------------------
 
     @Transactional(readOnly = true)
     public byte[] getImage(String username) {
@@ -74,20 +99,25 @@ public class ProfileImageService {
         return image.getImageData();
     }
 
+    // -----------------------------
+    // ACCOUNT VALIDATION
+    // -----------------------------
+
     private User findActiveUser(String username) {
 
         if (username == null || username.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Please sign in again."
-            );
+            throw unauthorized();
         }
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.UNAUTHORIZED,
-                        "Please sign in again."
-                ));
+                .orElseThrow(this::unauthorized);
+
+        requireActive(user);
+
+        return user;
+    }
+
+    private void requireActive(User user) {
 
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new ResponseStatusException(
@@ -95,7 +125,13 @@ public class ProfileImageService {
                     "This account is inactive."
             );
         }
+    }
 
-        return user;
+    private ResponseStatusException unauthorized() {
+
+        return new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "Please sign in again."
+        );
     }
 }
