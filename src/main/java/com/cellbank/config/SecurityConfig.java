@@ -161,6 +161,70 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/**")
                         .hasRole("ADMIN")
 
+                        // Customer viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/customers",
+                                "/api/customers/{customerId}"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        // Customer registration
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/customers"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
+
+                        // Customer editing
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/customers/{customerId}"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
+
+                     // Device viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/customers/{customerId}/devices",
+                                "/api/customers/{customerId}/devices/{deviceId}"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        // Device registration
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/customers/{customerId}/devices"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
+
+                        // Device editing
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/customers/{customerId}/devices/{deviceId}"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
+
                         .anyRequest()
                         .denyAll()
                 )
