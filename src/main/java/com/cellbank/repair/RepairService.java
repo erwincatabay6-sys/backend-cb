@@ -3,12 +3,15 @@ package com.cellbank.repair;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+
 import com.cellbank.auth.CurrentUserService;
 import com.cellbank.auth.User;
 import com.cellbank.auth.UserRepository;
@@ -36,6 +39,9 @@ public class RepairService {
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public RepairService(
             RepairJobRepository repairJobRepository,
             RepairStatusHistoryRepository historyRepository,
@@ -49,10 +55,7 @@ public class RepairService {
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
     }
-    
-    @PersistenceContext
-    private EntityManager entityManager;
-    
+
     public List<TechnicianOptionResponse> getTechnicianOptions() {
         return userRepository
                 .findDistinctByStatusAndRoles_NameOrderByFullNameAscIdAsc(
@@ -90,6 +93,8 @@ public class RepairService {
             );
         }
 
+        Map<Long, String> staffNames = loadRepairStaffNames(repairs);
+
         return repairs.stream()
                 .map(repair -> {
                     Long customerId =
@@ -101,7 +106,7 @@ public class RepairService {
                         );
                     }
 
-                    return RepairResponse.from(repair, customerId);
+                    return toResponse(repair, customerId, staffNames);
                 })
                 .toList();
     }
@@ -110,7 +115,7 @@ public class RepairService {
         RepairJob repair = requireRepair(repairId);
         Device device = requireDevice(repair.getDeviceId());
 
-        return RepairResponse.from(repair, device.getCustomerId());
+        return toResponse(repair, device.getCustomerId());
     }
 
     public List<RepairStatusHistoryResponse> getStatusHistory(
@@ -118,13 +123,25 @@ public class RepairService {
 
         requireRepair(repairId);
 
-        return historyRepository
-                .findByRepairJobIdOrderByChangedAtAscIdAsc(repairId)
-                .stream()
-                .map(RepairStatusHistoryResponse::from)
+        List<RepairStatusHistory> history = historyRepository
+                .findByRepairJobIdOrderByChangedAtAscIdAsc(repairId);
+
+        Set<Long> staffIds = new HashSet<>();
+
+        for (RepairStatusHistory entry : history) {
+            staffIds.add(entry.getChangedById());
+        }
+
+        Map<Long, String> staffNames = loadStaffNames(staffIds);
+
+        return history.stream()
+                .map(entry -> RepairStatusHistoryResponse.from(
+                        entry,
+                        staffNames.get(entry.getChangedById())
+                ))
                 .toList();
     }
-    
+
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")
     public RepairResponse updateAssignment(
@@ -172,23 +189,15 @@ public class RepairService {
                 repair.getAssignedTechnicianId(),
                 request.assignedTechnicianId())) {
 
-            return RepairResponse.from(
-                    repair,
-                    device.getCustomerId()
-            );
+            return toResponse(repair, device.getCustomerId());
         }
 
         repair.assignTechnician(request.assignedTechnicianId());
 
         repairJobRepository.flush();
-
-        // Return the timestamp exactly as stored by PostgreSQL.
         entityManager.refresh(repair);
 
-        return RepairResponse.from(
-                repair,
-                device.getCustomerId()
-        );
+        return toResponse(repair, device.getCustomerId());
     }
 
     @Transactional
@@ -209,8 +218,6 @@ public class RepairService {
                         HttpStatus.NOT_FOUND,
                         "Device not found for this customer."
                 ));
-        
-        
 
         validateTechnician(request.assignedTechnicianId());
 
@@ -244,8 +251,61 @@ public class RepairService {
         );
 
         historyRepository.saveAndFlush(initialHistory);
+        entityManager.refresh(saved);
 
-        return RepairResponse.from(saved, device.getCustomerId());
+        return toResponse(saved, device.getCustomerId());
+    }
+
+    private RepairResponse toResponse(
+            RepairJob repair,
+            Long customerId) {
+
+        return toResponse(
+                repair,
+                customerId,
+                loadRepairStaffNames(List.of(repair))
+        );
+    }
+
+    private RepairResponse toResponse(
+            RepairJob repair,
+            Long customerId,
+            Map<Long, String> staffNames) {
+
+        return RepairResponse.from(
+                repair,
+                customerId,
+                staffNames.get(repair.getAssignedTechnicianId()),
+                staffNames.get(repair.getCreatedById())
+        );
+    }
+
+    private Map<Long, String> loadRepairStaffNames(
+            List<RepairJob> repairs) {
+
+        Set<Long> staffIds = new HashSet<>();
+
+        for (RepairJob repair : repairs) {
+            staffIds.add(repair.getCreatedById());
+
+            if (repair.getAssignedTechnicianId() != null) {
+                staffIds.add(repair.getAssignedTechnicianId());
+            }
+        }
+
+        return loadStaffNames(staffIds);
+    }
+
+    private Map<Long, String> loadStaffNames(Set<Long> staffIds) {
+        Map<Long, String> names = new HashMap<>();
+
+        if (!staffIds.isEmpty()) {
+            for (User staff : userRepository.findAllById(staffIds)) {
+                names.put(staff.getId(), staff.getFullName());
+            }
+        }
+
+        return names;
     }
 
     private void validateTechnician(Long technicianId) {

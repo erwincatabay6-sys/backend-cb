@@ -1,7 +1,13 @@
 package com.cellbank.repair;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
+import com.cellbank.auth.User;
+import com.cellbank.auth.UserRepository;
 import com.cellbank.customer.CustomerRepository;
 import com.cellbank.customer.DeviceRepository;
 
@@ -19,24 +25,27 @@ public class RepairHistoryService {
     private final CustomerRepository customerRepository;
     private final DeviceRepository deviceRepository;
     private final RepairJobRepository repairJobRepository;
+    private final UserRepository userRepository;
 
     public RepairHistoryService(
             CustomerRepository customerRepository,
             DeviceRepository deviceRepository,
-            RepairJobRepository repairJobRepository) {
+            RepairJobRepository repairJobRepository,
+            UserRepository userRepository) {
 
         this.customerRepository = customerRepository;
         this.deviceRepository = deviceRepository;
         this.repairJobRepository = repairJobRepository;
+        this.userRepository = userRepository;
     }
 
     public List<RepairResponse> getCustomerHistory(Long customerId) {
         requireCustomer(customerId);
 
-        return repairJobRepository.findCustomerRepairs(customerId)
-                .stream()
-                .map(repair -> RepairResponse.from(repair, customerId))
-                .toList();
+        return toResponses(
+                repairJobRepository.findCustomerRepairs(customerId),
+                customerId
+        );
     }
 
     public List<RepairResponse> getDeviceHistory(
@@ -51,10 +60,44 @@ public class RepairHistoryService {
                         "Device not found for this customer."
                 ));
 
-        return repairJobRepository
-                .findByDeviceIdOrderByCreatedAtDescIdDesc(deviceId)
-                .stream()
-                .map(repair -> RepairResponse.from(repair, customerId))
+        return toResponses(
+                repairJobRepository
+                        .findByDeviceIdOrderByCreatedAtDescIdDesc(deviceId),
+                customerId
+        );
+    }
+
+    private List<RepairResponse> toResponses(
+            List<RepairJob> repairs,
+            Long customerId) {
+
+        if (repairs.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> staffIds = new HashSet<>();
+
+        for (RepairJob repair : repairs) {
+            staffIds.add(repair.getCreatedById());
+
+            if (repair.getAssignedTechnicianId() != null) {
+                staffIds.add(repair.getAssignedTechnicianId());
+            }
+        }
+
+        Map<Long, String> staffNames = new HashMap<>();
+
+        for (User staff : userRepository.findAllById(staffIds)) {
+            staffNames.put(staff.getId(), staff.getFullName());
+        }
+
+        return repairs.stream()
+                .map(repair -> RepairResponse.from(
+                        repair,
+                        customerId,
+                        staffNames.get(repair.getAssignedTechnicianId()),
+                        staffNames.get(repair.getCreatedById())
+                ))
                 .toList();
     }
 

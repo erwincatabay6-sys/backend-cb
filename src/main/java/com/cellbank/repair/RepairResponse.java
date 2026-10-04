@@ -11,7 +11,9 @@ public record RepairResponse(
         Long customerId,
         Long deviceId,
         Long assignedTechnicianId,
+        String assignedTechnicianName,
         Long createdById,
+        String createdByName,
         String reportedProblem,
         String serviceType,
         String accessoriesReceived,
@@ -27,7 +29,9 @@ public record RepairResponse(
 
     public static RepairResponse from(
             RepairJob repair,
-            Long customerId) {
+            Long customerId,
+            String assignedTechnicianName,
+            String createdByName) {
 
         return new RepairResponse(
                 repair.getId(),
@@ -36,7 +40,9 @@ public record RepairResponse(
                 customerId,
                 repair.getDeviceId(),
                 repair.getAssignedTechnicianId(),
+                assignedTechnicianName,
                 repair.getCreatedById(),
+                createdByName,
                 repair.getReportedProblem(),
                 repair.getServiceType(),
                 repair.getAccessoriesReceived(),
@@ -49,5 +55,12 @@ public record RepairResponse(
                 repair.getCreatedAt(),
                 repair.getUpdatedAt()
         );
+    }
+
+    public static RepairResponse from(
+            RepairJob repair,
+            Long customerId) {
+
+        return from(repair, customerId, null, null);
     }
 }
