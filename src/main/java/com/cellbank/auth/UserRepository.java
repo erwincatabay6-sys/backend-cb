@@ -1,6 +1,8 @@
 package com.cellbank.auth;
 
 import java.util.Optional;
+import java.util.List;
+
 import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.Lock;
@@ -32,4 +34,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
+    
+    List<User> findDistinctByStatusAndRoles_NameOrderByFullNameAscIdAsc(
+            UserStatus status,
+            String roleName);
 }

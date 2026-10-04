@@ -224,6 +224,52 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "FRONT_DESK"
                         )
+                        
+                        // Repair viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/repairs",
+                                "/api/repairs/technicians",
+                                "/api/repairs/{repairId}",
+                                "/api/repairs/{repairId}/status-history"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        // Repair creation
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/repairs"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
+                        
+                        // Customer and device repair history
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/customers/{customerId}/repairs",
+                                "/api/customers/{customerId}/devices/{deviceId}/repairs"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+                        
+                        // Technician reassignment
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/repairs/{repairId}/assignment"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
 
                         .anyRequest()
                         .denyAll()
