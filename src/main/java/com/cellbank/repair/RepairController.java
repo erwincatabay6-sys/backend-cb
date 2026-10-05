@@ -73,4 +73,17 @@ public class RepairController {
                 request
         );
     }
+    
+    @PatchMapping("/{repairId}/status")
+    public RepairResponse updateStatus(
+            Principal principal,
+            @PathVariable("repairId") Long repairId,
+            @Valid @RequestBody RepairStatusUpdateRequest request) {
+
+        return repairService.updateStatus(
+                principal.getName(),
+                repairId,
+                request
+        );
+    }
 }

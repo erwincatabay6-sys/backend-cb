@@ -270,6 +270,16 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "FRONT_DESK"
                         )
+                        
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/repairs/{repairId}/status"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK",
+                                "TECHNICIAN"
+                        )
 
                         .anyRequest()
                         .denyAll()

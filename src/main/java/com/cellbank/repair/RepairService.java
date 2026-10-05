@@ -199,6 +199,121 @@ public class RepairService {
 
         return toResponse(repair, device.getCustomerId());
     }
+    
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK', 'TECHNICIAN')")
+    public RepairResponse updateStatus(
+            String username,
+            Long repairId,
+            RepairStatusUpdateRequest request) {
+
+        Long changedById = currentUserService.getCurrentUser(username).id();
+
+        var actingUser = userRepository.findById(changedById)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Your account could not be found."));
+
+        RepairJob repair = repairJobRepository.findByIdForUpdate(repairId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Repair not found."));
+
+        entityManager.refresh(repair);
+
+        if (!Objects.equals(repair.getUpdatedAt(), request.expectedUpdatedAt())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This repair changed since you opened it. Reload the page before changing its status.");
+        }
+
+        RepairStatus previousStatus = repair.getStatus();
+        RepairStatus newStatus = request.status();
+
+        if (newStatus == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Select a repair status.");
+        }
+
+        boolean permittedByRole = actingUser.getRoles().stream()
+                .anyMatch(role -> {
+                    String roleName = role.getName();
+
+                    if ("ADMIN".equals(roleName)) {
+                        return true;
+                    }
+
+                    return switch (newStatus) {
+                        case RECEIVED, COMPLETED, CANCELLED ->
+                                "FRONT_DESK".equals(roleName);
+
+                        case AWAITING_APPROVAL ->
+                                "FRONT_DESK".equals(roleName)
+                                        || "TECHNICIAN".equals(roleName);
+
+                        case IN_PROGRESS, AWAITING_PARTS, READY_FOR_RELEASE ->
+                                "TECHNICIAN".equals(roleName);
+                    };
+                });
+
+        if (!permittedByRole) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not have permission to select this repair status.");
+        }
+
+        boolean allowedTransition = switch (previousStatus) {
+            case RECEIVED ->
+                    newStatus == RepairStatus.AWAITING_APPROVAL
+                            || newStatus == RepairStatus.IN_PROGRESS
+                            || newStatus == RepairStatus.CANCELLED;
+
+            case AWAITING_APPROVAL ->
+                    newStatus == RepairStatus.IN_PROGRESS
+                            || newStatus == RepairStatus.CANCELLED;
+
+            case IN_PROGRESS ->
+                    newStatus == RepairStatus.AWAITING_APPROVAL
+                            || newStatus == RepairStatus.AWAITING_PARTS
+                            || newStatus == RepairStatus.READY_FOR_RELEASE
+                            || newStatus == RepairStatus.CANCELLED;
+
+            case AWAITING_PARTS ->
+                    newStatus == RepairStatus.IN_PROGRESS
+                            || newStatus == RepairStatus.READY_FOR_RELEASE
+                            || newStatus == RepairStatus.CANCELLED;
+
+            case READY_FOR_RELEASE ->
+                    newStatus == RepairStatus.IN_PROGRESS
+                            || newStatus == RepairStatus.COMPLETED;
+
+            case COMPLETED, CANCELLED -> false;
+        };
+
+        if (!allowedTransition) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This status change is not allowed from the repair's current status.");
+        }
+
+        var device = requireDevice(repair.getDeviceId());
+
+        repair.changeStatus(newStatus);
+
+        historyRepository.saveAndFlush(
+                new RepairStatusHistory(
+                        repair.getId(),
+                        changedById,
+                        previousStatus,
+                        newStatus,
+                        request.note()));
+
+        repairJobRepository.flush();
+        entityManager.refresh(repair);
+
+        return toResponse(repair, device.getCustomerId());
+    }
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")

@@ -133,6 +133,14 @@ public class RepairJob {
     void assignTechnician(Long technicianId) {
         this.assignedTechnicianId = technicianId;
     }
+    
+    void changeStatus(RepairStatus newStatus) {
+        if (newStatus == null) {
+            throw new IllegalArgumentException("Repair status is required.");
+        }
+
+        this.status = newStatus;
+    }
 
     @PrePersist
     protected void onCreate() {
