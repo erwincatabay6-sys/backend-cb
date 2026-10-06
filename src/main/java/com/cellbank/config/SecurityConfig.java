@@ -280,6 +280,26 @@ public class SecurityConfig {
                                 "FRONT_DESK",
                                 "TECHNICIAN"
                         )
+                        
+                     // Findings viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/repairs/{repairId}/findings"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN"
+                        )
+
+                        // Findings recording
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/repairs/{repairId}/findings"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN"
+                        )
 
                         .anyRequest()
                         .denyAll()
