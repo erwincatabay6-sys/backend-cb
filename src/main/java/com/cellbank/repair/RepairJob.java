@@ -161,6 +161,10 @@ public class RepairJob {
 
         this.agreedPrice = agreedPrice;
     }
+    
+    void markPaymentRecorded() {
+        this.updatedAt = Instant.now();
+    }
 
     @PrePersist
     protected void onCreate() {

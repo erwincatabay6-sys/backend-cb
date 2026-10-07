@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import java.math.BigDecimal;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
@@ -38,6 +39,7 @@ public class RepairService {
     private final DeviceRepository deviceRepository;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
+    private final RepairPaymentRepository paymentRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -47,13 +49,15 @@ public class RepairService {
             RepairStatusHistoryRepository historyRepository,
             DeviceRepository deviceRepository,
             UserRepository userRepository,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            RepairPaymentRepository paymentRepository) {
 
         this.repairJobRepository = repairJobRepository;
         this.historyRepository = historyRepository;
         this.deviceRepository = deviceRepository;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
+        this.paymentRepository = paymentRepository;
     }
 
     public List<TechnicianOptionResponse> getTechnicianOptions() {
@@ -407,6 +411,17 @@ public class RepairService {
                     HttpStatus.CONFLICT,
                     "The agreed price cannot be changed "
                             + "for a completed or cancelled repair."
+            );
+        }
+
+        BigDecimal totalPaid = paymentRepository
+                .sumAmountByRepairJobId(repairId);
+
+        if (request.agreedPrice().compareTo(totalPaid) < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "The agreed price cannot be lower than the amount "
+                            + "already paid: " + totalPaid.toPlainString() + "."
             );
         }
 

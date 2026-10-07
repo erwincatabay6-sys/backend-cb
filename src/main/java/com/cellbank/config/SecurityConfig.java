@@ -341,6 +341,27 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "FRONT_DESK"
                         )
+                        
+                     // Payment viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/repairs/{repairId}/payments"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        // Payment recording
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/repairs/{repairId}/payments"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
 
                         .anyRequest()
                         .denyAll()
