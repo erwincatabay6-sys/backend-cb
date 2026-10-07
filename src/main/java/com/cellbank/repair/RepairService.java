@@ -441,6 +441,86 @@ public class RepairService {
 
         return toResponse(repair, device.getCustomerId());
     }
+    
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
+    public RepairResponse updateProblemCategory(
+            String username,
+            Long repairId,
+            RepairProblemCategoryUpdateRequest request) {
+
+        Long actingUserId = currentUserService
+                .getCurrentUser(username)
+                .id();
+
+        User actingUser = userRepository.findById(actingUserId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Your account could not be found."
+                ));
+
+        boolean permittedByRole = actingUser.getRoles().stream()
+                .anyMatch(role ->
+                        "ADMIN".equals(role.getName())
+                                || "TECHNICIAN".equals(role.getName()));
+
+        if (!permittedByRole) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not have permission to update problem categories."
+            );
+        }
+
+        RepairJob repair = repairJobRepository
+                .findByIdForUpdate(repairId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Repair not found."
+                ));
+
+        entityManager.refresh(repair);
+
+        if (!Objects.equals(
+                repair.getUpdatedAt(),
+                request.expectedUpdatedAt())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This repair changed since you opened it. "
+                            + "Reload the page before updating its problem category."
+            );
+        }
+
+        if (repair.getStatus() == RepairStatus.COMPLETED
+                || repair.getStatus() == RepairStatus.CANCELLED) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The problem category cannot be changed "
+                            + "for a completed or cancelled repair."
+            );
+        }
+
+        if (request.problemCategory() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Select a problem category."
+            );
+        }
+
+        Device device = requireDevice(repair.getDeviceId());
+
+        if (repair.getProblemCategory() == request.problemCategory()) {
+            return toResponse(repair, device.getCustomerId());
+        }
+
+        repair.updateProblemCategory(request.problemCategory());
+
+        repairJobRepository.flush();
+        entityManager.refresh(repair);
+
+        return toResponse(repair, device.getCustomerId());
+    }
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")
@@ -478,6 +558,8 @@ public class RepairService {
                 null,
                 null
         );
+        
+        repair.updateProblemCategory(request.problemCategory());
 
         RepairJob saved = repairJobRepository.saveAndFlush(repair);
 

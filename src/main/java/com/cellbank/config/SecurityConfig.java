@@ -362,6 +362,16 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "FRONT_DESK"
                         )
+                        
+                     // Repair problem category updates
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/repairs/{repairId}/problem-category"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN"
+                        )
 
                         .anyRequest()
                         .denyAll()

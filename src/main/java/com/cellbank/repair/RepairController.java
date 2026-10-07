@@ -113,4 +113,17 @@ public class RepairController {
         );
     }
     
+    @PatchMapping("/{repairId}/problem-category")
+    public RepairResponse updateProblemCategory(
+            Principal principal,
+            @PathVariable("repairId") Long repairId,
+            @Valid @RequestBody RepairProblemCategoryUpdateRequest request) {
+
+        return repairService.updateProblemCategory(
+                principal.getName(),
+                repairId,
+                request
+        );
+    }
+    
 }

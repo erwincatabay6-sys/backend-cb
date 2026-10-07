@@ -27,6 +27,9 @@ public record RepairCreateRequest(
         )
         String reportedProblem,
 
+        @NotNull(message = "Select a problem category.")
+        RepairProblemCategory problemCategory,
+
         @NotBlank(message = "Select a service type.")
         @Pattern(
                 regexp = "DIAGNOSTIC|HARDWARE_REPAIR|SOFTWARE_REPAIR|MAINTENANCE|OTHER",

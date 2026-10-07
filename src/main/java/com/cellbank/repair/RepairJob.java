@@ -40,6 +40,10 @@ public class RepairJob {
 
     @Column(name = "reported_problem", nullable = false, columnDefinition = "text")
     private String reportedProblem;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "problem_category", length = 30)
+    private RepairProblemCategory problemCategory;
 
     @Column(name = "service_type", nullable = false, length = 80)
     private String serviceType;
@@ -165,6 +169,16 @@ public class RepairJob {
     void markPaymentRecorded() {
         this.updatedAt = Instant.now();
     }
+    
+    void updateProblemCategory(RepairProblemCategory problemCategory) {
+        if (problemCategory == null) {
+            throw new IllegalArgumentException(
+                    "Problem category is required."
+            );
+        }
+
+        this.problemCategory = problemCategory;
+    }
 
     @PrePersist
     protected void onCreate() {
@@ -224,6 +238,10 @@ public class RepairJob {
 
     public RepairPriority getPriority() {
         return priority;
+    }
+    
+    public RepairProblemCategory getProblemCategory() {
+        return problemCategory;
     }
 
     public BigDecimal getEstimatedCost() {
