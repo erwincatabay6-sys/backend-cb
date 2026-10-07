@@ -300,6 +300,47 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "TECHNICIAN"
                         )
+                        
+                     // Parts viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/repairs/{repairId}/parts"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        // Parts recording
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/repairs/{repairId}/parts"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN"
+                        )
+                        
+                     // Repair estimate updates
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/repairs/{repairId}/estimate"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN"
+                        )
+
+                        // Agreed repair price updates
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/repairs/{repairId}/agreed-price"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
 
                         .anyRequest()
                         .denyAll()

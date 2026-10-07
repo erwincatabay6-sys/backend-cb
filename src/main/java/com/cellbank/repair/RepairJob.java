@@ -141,6 +141,26 @@ public class RepairJob {
 
         this.status = newStatus;
     }
+    
+    void updateEstimatedCost(BigDecimal estimatedCost) {
+        if (estimatedCost == null || estimatedCost.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Estimated cost is required and must not be negative."
+            );
+        }
+
+        this.estimatedCost = estimatedCost;
+    }
+
+    void updateAgreedPrice(BigDecimal agreedPrice) {
+        if (agreedPrice == null || agreedPrice.signum() < 0) {
+            throw new IllegalArgumentException(
+                    "Agreed price is required and must not be negative."
+            );
+        }
+
+        this.agreedPrice = agreedPrice;
+    }
 
     @PrePersist
     protected void onCreate() {

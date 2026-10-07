@@ -86,4 +86,31 @@ public class RepairController {
                 request
         );
     }
+    
+    @PatchMapping("/{repairId}/estimate")
+    public RepairResponse updateEstimate(
+            Principal principal,
+            @PathVariable("repairId") Long repairId,
+            @Valid @RequestBody RepairEstimateUpdateRequest request) {
+
+        return repairService.updateEstimate(
+                principal.getName(),
+                repairId,
+                request
+        );
+    }
+
+    @PatchMapping("/{repairId}/agreed-price")
+    public RepairResponse updateAgreedPrice(
+            Principal principal,
+            @PathVariable("repairId") Long repairId,
+            @Valid @RequestBody RepairAgreedPriceUpdateRequest request) {
+
+        return repairService.updateAgreedPrice(
+                principal.getName(),
+                repairId,
+                request
+        );
+    }
+    
 }

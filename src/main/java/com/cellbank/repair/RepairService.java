@@ -314,6 +314,118 @@ public class RepairService {
 
         return toResponse(repair, device.getCustomerId());
     }
+    
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
+    public RepairResponse updateEstimate(
+            String username,
+            Long repairId,
+            RepairEstimateUpdateRequest request) {
+
+        currentUserService.getCurrentUser(username);
+
+        RepairJob repair = repairJobRepository
+                .findByIdForUpdate(repairId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Repair not found."
+                ));
+
+        entityManager.refresh(repair);
+
+        if (!Objects.equals(
+                repair.getUpdatedAt(),
+                request.expectedUpdatedAt())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This repair changed since you opened it. "
+                            + "Reload the page before updating its estimate."
+            );
+        }
+
+        if (repair.getStatus() == RepairStatus.COMPLETED
+                || repair.getStatus() == RepairStatus.CANCELLED) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The estimate cannot be changed "
+                            + "for a completed or cancelled repair."
+            );
+        }
+
+        Device device = requireDevice(repair.getDeviceId());
+
+        if (repair.getEstimatedCost() != null
+                && repair.getEstimatedCost()
+                        .compareTo(request.estimatedCost()) == 0) {
+
+            return toResponse(repair, device.getCustomerId());
+        }
+
+        repair.updateEstimatedCost(request.estimatedCost());
+
+        repairJobRepository.flush();
+        entityManager.refresh(repair);
+
+        return toResponse(repair, device.getCustomerId());
+    }
+
+    @Transactional
+    @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")
+    public RepairResponse updateAgreedPrice(
+            String username,
+            Long repairId,
+            RepairAgreedPriceUpdateRequest request) {
+
+        currentUserService.getCurrentUser(username);
+
+        RepairJob repair = repairJobRepository
+                .findByIdForUpdate(repairId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Repair not found."
+                ));
+
+        entityManager.refresh(repair);
+
+        if (!Objects.equals(
+                repair.getUpdatedAt(),
+                request.expectedUpdatedAt())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This repair changed since you opened it. "
+                            + "Reload the page before updating its agreed price."
+            );
+        }
+
+        if (repair.getStatus() == RepairStatus.COMPLETED
+                || repair.getStatus() == RepairStatus.CANCELLED) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The agreed price cannot be changed "
+                            + "for a completed or cancelled repair."
+            );
+        }
+
+        Device device = requireDevice(repair.getDeviceId());
+
+        if (repair.getAgreedPrice() != null
+                && repair.getAgreedPrice()
+                        .compareTo(request.agreedPrice()) == 0) {
+
+            return toResponse(repair, device.getCustomerId());
+        }
+
+        repair.updateAgreedPrice(request.agreedPrice());
+
+        repairJobRepository.flush();
+        entityManager.refresh(repair);
+
+        return toResponse(repair, device.getCustomerId());
+    }
 
     @Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'FRONT_DESK')")
