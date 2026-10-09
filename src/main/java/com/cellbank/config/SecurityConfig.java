@@ -372,6 +372,28 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "TECHNICIAN"
                         )
+                        
+                        // AI conversation, context, and image viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/repairs/{repairId}/ai/messages",
+                                "/api/repairs/{repairId}/ai/context",
+                                "/api/repairs/{repairId}/ai/messages/{messageId}/attachments/{attachmentId}"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN"
+                        )
+
+                        // AI message sending
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/repairs/{repairId}/ai/messages"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN"
+                        )
 
                         .anyRequest()
                         .denyAll()
