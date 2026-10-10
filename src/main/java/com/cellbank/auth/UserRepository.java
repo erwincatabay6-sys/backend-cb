@@ -38,4 +38,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findDistinctByStatusAndRoles_NameOrderByFullNameAscIdAsc(
             UserStatus status,
             String roleName);
+    
+    List<User> findDistinctByRoles_NameOrderByFullNameAscIdAsc(
+            String roleName);
+
+    Optional<User> findByIdAndRoles_Name(
+            Long id,
+            String roleName);
 }

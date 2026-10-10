@@ -29,4 +29,26 @@ public interface RepairJobRepository extends JpaRepository<RepairJob, Long> {
     @Query("select r from RepairJob r where r.id = :repairId")
     Optional<RepairJob> findByIdForUpdate(
             @Param("repairId") Long repairId);
+    
+    List<RepairJob> findByAssignedTechnicianIdOrderByUpdatedAtDescIdDesc(
+            Long assignedTechnicianId);
+
+    @Query("""
+            select r.assignedTechnicianId as technicianId,
+                   r.status as status,
+                   count(r) as repairCount
+            from RepairJob r
+            where r.assignedTechnicianId is not null
+            group by r.assignedTechnicianId, r.status
+            """)
+    List<TechnicianStatusCount> countRepairsByTechnicianAndStatus();
+
+    interface TechnicianStatusCount {
+
+        Long getTechnicianId();
+
+        RepairStatus getStatus();
+
+        Long getRepairCount();
+    }
 }

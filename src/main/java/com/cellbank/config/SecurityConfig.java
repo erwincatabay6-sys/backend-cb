@@ -225,6 +225,19 @@ public class SecurityConfig {
                                 "FRONT_DESK"
                         )
                         
+                        // Technician viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/technicians",
+                                "/api/technicians/{technicianId}"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        
                         // Dashboard viewing
                         .requestMatchers(
                                 HttpMethod.GET,
