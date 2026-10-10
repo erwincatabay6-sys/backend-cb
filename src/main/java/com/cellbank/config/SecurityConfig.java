@@ -434,6 +434,29 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "TECHNICIAN"
                         )
+                        
+                        // Notification viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/notifications"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
+
+                        // Notification read status
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/notifications/{notificationId}/read",
+                                "/api/notifications/read-all"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
 
                         .anyRequest()
                         .denyAll()

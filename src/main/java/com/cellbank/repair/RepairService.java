@@ -1,5 +1,6 @@
 package com.cellbank.repair;
 
+import com.cellbank.notification.RepairNotificationService;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HashMap;
@@ -40,6 +41,7 @@ public class RepairService {
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
     private final RepairPaymentRepository paymentRepository;
+    private final RepairNotificationService repairNotificationService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -50,7 +52,8 @@ public class RepairService {
             DeviceRepository deviceRepository,
             UserRepository userRepository,
             CurrentUserService currentUserService,
-            RepairPaymentRepository paymentRepository) {
+            RepairPaymentRepository paymentRepository,
+            RepairNotificationService repairNotificationService) {
 
         this.repairJobRepository = repairJobRepository;
         this.historyRepository = historyRepository;
@@ -58,6 +61,7 @@ public class RepairService {
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
         this.paymentRepository = paymentRepository;
+        this.repairNotificationService = repairNotificationService;
     }
 
     public List<TechnicianOptionResponse> getTechnicianOptions() {
@@ -201,6 +205,8 @@ public class RepairService {
         repairJobRepository.flush();
         entityManager.refresh(repair);
 
+        repairNotificationService.notifyAssignment(repair);
+
         return toResponse(repair, device.getCustomerId());
     }
     
@@ -315,6 +321,12 @@ public class RepairService {
 
         repairJobRepository.flush();
         entityManager.refresh(repair);
+
+        repairNotificationService.notifyStatusChange(
+                repair,
+                previousStatus,
+                changedById
+        );
 
         return toResponse(repair, device.getCustomerId());
     }
@@ -576,6 +588,8 @@ public class RepairService {
 
         historyRepository.saveAndFlush(initialHistory);
         entityManager.refresh(saved);
+
+        repairNotificationService.notifyAssignment(saved);
 
         return toResponse(saved, device.getCustomerId());
     }
