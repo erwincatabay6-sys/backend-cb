@@ -1,5 +1,6 @@
 package com.cellbank.repair;
 
+import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -20,4 +21,34 @@ public interface RepairPaymentRepository
             """)
     BigDecimal sumAmountByRepairJobId(
             @Param("repairJobId") Long repairJobId);
+    
+    List<RepairPayment>
+    findByPaidAtGreaterThanEqualAndPaidAtLessThanOrderByPaidAtAscIdAsc(
+            Instant startInclusive,
+            Instant endExclusive);
+
+    List<RepairPayment>
+    findByPaidAtGreaterThanEqualOrderByPaidAtAscIdAsc(
+            Instant startInclusive);
+
+    List<RepairPayment>
+    findByPaidAtLessThanOrderByPaidAtAscIdAsc(
+            Instant endExclusive);
+
+    @Query("""
+    select payment.repairJobId as repairJobId,
+           sum(payment.amount) as totalPaid
+    from RepairPayment payment
+    where payment.repairJobId in :repairIds
+    group by payment.repairJobId
+    """)
+    List<RepairPaymentTotal> sumPaymentsByRepairIds(
+    @Param("repairIds") List<Long> repairIds);
+
+    interface RepairPaymentTotal {
+
+    	Long getRepairJobId();
+
+    	BigDecimal getTotalPaid();
+}
 }

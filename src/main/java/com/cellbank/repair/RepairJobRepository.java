@@ -1,5 +1,6 @@
 package com.cellbank.repair;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,6 +43,19 @@ public interface RepairJobRepository extends JpaRepository<RepairJob, Long> {
             group by r.assignedTechnicianId, r.status
             """)
     List<TechnicianStatusCount> countRepairsByTechnicianAndStatus();
+    
+    List<RepairJob>
+    findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDescIdDesc(
+            Instant startInclusive,
+            Instant endExclusive);
+
+    List<RepairJob>
+    findByCreatedAtGreaterThanEqualOrderByCreatedAtDescIdDesc(
+            Instant startInclusive);
+
+    List<RepairJob>
+    findByCreatedAtLessThanOrderByCreatedAtDescIdDesc(
+            Instant endExclusive);
 
     interface TechnicianStatusCount {
 

@@ -225,6 +225,14 @@ public class SecurityConfig {
                                 "FRONT_DESK"
                         )
                         
+                        // Reports viewing
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/reports"
+                        )
+                        .hasRole("ADMIN")
+
+                        
                         // Technician viewing
                         .requestMatchers(
                                 HttpMethod.GET,
