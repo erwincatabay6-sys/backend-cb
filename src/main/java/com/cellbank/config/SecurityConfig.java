@@ -77,6 +77,13 @@ public class SecurityConfig {
                                 "/api/auth/csrf"
                         )
                         .permitAll()
+                        
+                        // Public repair tracking
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/tracking/{trackingCode}"
+                        )
+                        .permitAll()
 
                         .requestMatchers(
                                 HttpMethod.GET,
