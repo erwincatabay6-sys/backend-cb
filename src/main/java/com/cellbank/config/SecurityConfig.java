@@ -167,6 +167,12 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/users/**")
                         .hasRole("ADMIN")
+                        
+                        .requestMatchers(
+                                "/api/admin/backups",
+                                "/api/admin/backups/**"
+                        )
+                        .hasRole("ADMIN")
 
                         // Customer viewing
                         .requestMatchers(
