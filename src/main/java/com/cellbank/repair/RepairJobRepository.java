@@ -58,6 +58,11 @@ public interface RepairJobRepository extends JpaRepository<RepairJob, Long> {
     List<RepairJob>
     findByCreatedAtLessThanOrderByCreatedAtDescIdDesc(
             Instant endExclusive);
+    
+    long countByCreatedByIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                Long createdById,
+                Instant startInclusive,
+                Instant endExclusive);
 
     interface TechnicianStatusCount {
 
@@ -66,6 +71,8 @@ public interface RepairJobRepository extends JpaRepository<RepairJob, Long> {
         RepairStatus getStatus();
 
         Long getRepairCount();
+        
+        
     }
     
 }

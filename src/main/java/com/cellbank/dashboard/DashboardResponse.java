@@ -1,6 +1,7 @@
 package com.cellbank.dashboard;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -13,7 +14,9 @@ public record DashboardResponse(
         List<RepairItem> attentionRepairs,
         List<TechnicianWorkload> technicianWorkload,
         List<RepairItem> recentActiveRepairs,
-        FinancialSnapshot financialSnapshot
+        FinancialSnapshot financialSnapshot,
+        List<FrontDeskActivity> frontDeskActivity,
+        LocalDate activityDate
 ) {
 
     public record Summary(
@@ -38,7 +41,18 @@ public record DashboardResponse(
             Long id,
             String name,
             long activeRepairs,
-            long totalRepairs
+            long totalRepairs,
+            String profileImageUrl
+    ) {
+    }
+
+    public record FrontDeskActivity(
+            Long id,
+            String name,
+            long repairsRegistered,
+            long paymentsRecorded,
+            long repairsReleased,
+            String profileImageUrl
     ) {
     }
 
