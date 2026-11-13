@@ -14,10 +14,11 @@ public record TrackingResponse(
         List<StatusEntry> statusHistory
 ) {
 
-    public record StatusEntry(
-            RepairStatus status,
-            Instant changedAt,
-            String description
-    ) {
-    }
+	public record StatusEntry(
+	        RepairStatus status,
+	        Instant changedAt,
+	        String description,
+	        String customerUpdate
+	) {
+	}
 }

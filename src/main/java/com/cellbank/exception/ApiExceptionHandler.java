@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.ResponseEntity;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -72,7 +73,7 @@ public class ApiExceptionHandler {
     // -----------------------------
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ProblemDetail handleResponseStatus(
+    public ResponseEntity<ProblemDetail> handleResponseStatus(
             ResponseStatusException exception) {
 
         String detail = exception.getReason();
@@ -81,10 +82,15 @@ public class ApiExceptionHandler {
             detail = "The request could not be completed.";
         }
 
-        return ProblemDetail.forStatusAndDetail(
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 exception.getStatusCode(),
                 detail
         );
+
+        return ResponseEntity
+                .status(exception.getStatusCode())
+                .headers(exception.getHeaders())
+                .body(problem);
     }
 
     // -----------------------------

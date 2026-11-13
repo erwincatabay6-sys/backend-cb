@@ -12,9 +12,15 @@ public record RepairStatusUpdateRequest(
 
         @Size(
                 max = 2000,
-                message = "Status note must not exceed 2000 characters."
+                message = "Internal note must not exceed 2000 characters."
         )
         String note,
+
+        @Size(
+                max = 2000,
+                message = "Customer update must not exceed 2000 characters."
+        )
+        String customerUpdate,
 
         @NotNull(
                 message = "The repair's last-updated time is required."
@@ -29,6 +35,14 @@ public record RepairStatusUpdateRequest(
 
             if (note.isEmpty()) {
                 note = null;
+            }
+        }
+
+        if (customerUpdate != null) {
+            customerUpdate = customerUpdate.strip();
+
+            if (customerUpdate.isEmpty()) {
+                customerUpdate = null;
             }
         }
     }

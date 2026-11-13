@@ -3,6 +3,7 @@ package com.cellbank.tracking;
 import java.time.Instant;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.Locale;
 
 import com.cellbank.customer.Device;
 import com.cellbank.customer.DeviceRepository;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+
 @Service
 @Transactional(
         readOnly = true,
@@ -25,9 +27,11 @@ import org.springframework.web.server.ResponseStatusException;
 )
 public class TrackingService {
 
-    // Existing repair creation generates a 43-character URL-safe token.
-    private static final Pattern TRACKING_CODE_PATTERN =
-            Pattern.compile("[A-Za-z0-9_-]{43}");
+	private static final Pattern LEGACY_TRACKING_CODE_PATTERN =
+	        Pattern.compile("[A-Za-z0-9_-]{43}");
+
+	private static final Pattern SHORT_TRACKING_CODE_PATTERN =
+	        Pattern.compile("[2-9A-HJ-NP-Z]{4}-?[2-9A-HJ-NP-Z]{4}");
 
     private final RepairJobRepository repairRepository;
     private final DeviceRepository deviceRepository;
@@ -44,12 +48,7 @@ public class TrackingService {
     }
 
     public TrackingResponse trackRepair(String trackingCode) {
-        String code = trackingCode == null ? "" : trackingCode.trim();
-
-        // Preserve letter case: tracking codes are case-sensitive.
-        if (!TRACKING_CODE_PATTERN.matcher(code).matches()) {
-            throw notFound();
-        }
+    	String code = normalizeTrackingCode(trackingCode);
 
         RepairJob repair = repairRepository.findByTrackingCode(code)
                 .orElseThrow(this::notFound);
@@ -61,11 +60,12 @@ public class TrackingService {
                 .findByRepairJobIdOrderByChangedAtAscIdAsc(repair.getId());
 
         List<TrackingResponse.StatusEntry> entries = history.stream()
-                .map(entry -> new TrackingResponse.StatusEntry(
-                        entry.getNewStatus(),
-                        entry.getChangedAt(),
-                        describeStatus(entry.getNewStatus())
-                ))
+        		.map(entry -> new TrackingResponse.StatusEntry(
+        		        entry.getNewStatus(),
+        		        entry.getChangedAt(),
+        		        describeStatus(entry.getNewStatus()),
+        		        entry.getCustomerUpdate()
+        		))
                 .toList();
 
         Instant lastUpdated = history.isEmpty()
@@ -80,6 +80,27 @@ public class TrackingService {
                 lastUpdated,
                 entries
         );
+    }
+    
+    private String normalizeTrackingCode(String trackingCode) {
+        String code = trackingCode == null ? "" : trackingCode.trim();
+
+        // Existing long codes must retain their original letter case.
+        if (LEGACY_TRACKING_CODE_PATTERN.matcher(code).matches()) {
+            return code;
+        }
+
+        String uppercaseCode = code.toUpperCase(Locale.ROOT);
+
+        if (!SHORT_TRACKING_CODE_PATTERN.matcher(uppercaseCode).matches()) {
+            throw notFound();
+        }
+
+        String compactCode = uppercaseCode.replace("-", "");
+
+        return compactCode.substring(0, 4)
+                + "-"
+                + compactCode.substring(4);
     }
 
     private String describeStatus(RepairStatus status) {
