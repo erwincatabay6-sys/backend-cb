@@ -14,6 +14,8 @@ import org.springframework.data.repository.query.Param;
 public interface RepairJobRepository extends JpaRepository<RepairJob, Long> {
 	
     Optional<RepairJob> findByTrackingCode(String trackingCode);
+    
+    boolean existsByTrackingCode(String trackingCode);
 
     List<RepairJob> findByDeviceIdOrderByCreatedAtDescIdDesc(Long deviceId);
 

@@ -3,6 +3,7 @@ package com.cellbank.config;
 
 import com.cellbank.auth.AuthRateLimitFilter;
 import com.cellbank.auth.AuthRateLimitService;
+import com.cellbank.tracking.TrackingRateLimitFilter;
 
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import jakarta.servlet.DispatcherType;
@@ -48,6 +49,11 @@ public class SecurityConfig {
                 .addFilterBefore(
                         new AuthRateLimitFilter(authRateLimitService),
                         UsernamePasswordAuthenticationFilter.class
+                )
+                
+                .addFilterBefore(
+                        new TrackingRateLimitFilter(authRateLimitService),
+                        AuthRateLimitFilter.class
                 )
 
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -289,6 +295,16 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/repairs"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "FRONT_DESK"
+                        )
+                        
+                     // Resend customer tracking email
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/repairs/{repairId}/tracking-email"
                         )
                         .hasAnyRole(
                                 "ADMIN",

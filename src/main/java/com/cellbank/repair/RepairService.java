@@ -20,6 +20,11 @@ import com.cellbank.auth.UserRepository;
 import com.cellbank.auth.UserStatus;
 import com.cellbank.customer.Device;
 import com.cellbank.customer.DeviceRepository;
+import com.cellbank.customer.Customer;
+import com.cellbank.customer.CustomerRepository;
+import com.cellbank.email.RepairCreatedEmailEvent;
+
+import org.springframework.context.ApplicationEventPublisher;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -27,6 +32,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.cellbank.tracking.TrackingCodeGenerator;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @Service
 @Transactional(readOnly = true)
@@ -43,6 +51,9 @@ public class RepairService {
     private final RepairPaymentRepository paymentRepository;
     private final RepairNotificationService repairNotificationService;
     private final RepairAccessService repairAccessService;
+    private final TrackingCodeGenerator trackingCodeGenerator;
+    private final CustomerRepository customerRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -55,7 +66,10 @@ public class RepairService {
             CurrentUserService currentUserService,
             RepairPaymentRepository paymentRepository,
             RepairNotificationService repairNotificationService,
-            RepairAccessService repairAccessService) {
+            RepairAccessService repairAccessService,
+            TrackingCodeGenerator trackingCodeGenerator,
+            CustomerRepository customerRepository,
+            ApplicationEventPublisher eventPublisher) {
 
         this.repairJobRepository = repairJobRepository;
         this.historyRepository = historyRepository;
@@ -65,6 +79,9 @@ public class RepairService {
         this.paymentRepository = paymentRepository;
         this.repairNotificationService = repairNotificationService;
         this.repairAccessService = repairAccessService;
+        this.trackingCodeGenerator = trackingCodeGenerator;
+        this.customerRepository = customerRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     public List<TechnicianOptionResponse> getTechnicianOptions() {
@@ -606,10 +623,17 @@ public class RepairService {
                 ));
 
         validateTechnician(request.assignedTechnicianId());
+        
+        Customer customer = customerRepository
+                .findById(device.getCustomerId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Customer not found."
+                ));
 
         RepairJob repair = new RepairJob(
                 "TMP-" + randomToken(18),
-                randomToken(32),
+                generateAvailableTrackingCode(),
                 device.getId(),
                 request.assignedTechnicianId(),
                 creatorId,
@@ -625,7 +649,21 @@ public class RepairService {
         
         repair.updateProblemCategory(request.problemCategory());
 
-        RepairJob saved = repairJobRepository.saveAndFlush(repair);
+        RepairJob saved;
+
+        try {
+            saved = repairJobRepository.saveAndFlush(repair);
+        } catch (DataIntegrityViolationException exception) {
+            if (isTrackingCodeCollision(exception)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "The generated tracking code is already in use. "
+                                + "The repair was not created. Please try again."
+                );
+            }
+
+            throw exception;
+        }
 
         saved.assignReferenceFromId();
         repairJobRepository.flush();
@@ -642,6 +680,21 @@ public class RepairService {
         entityManager.refresh(saved);
 
         repairNotificationService.notifyAssignment(saved);
+
+        if (customer.getEmail() != null
+                && !customer.getEmail().isBlank()) {
+
+            eventPublisher.publishEvent(
+                    new RepairCreatedEmailEvent(
+                            saved.getId(),
+                            customer.getEmail(),
+                            customer.getName(),
+                            saved.getRepairReference(),
+                            device.getBrand() + " " + device.getModel(),
+                            saved.getTrackingCode()
+                    )
+            );
+        }
 
         return toResponse(saved, device.getCustomerId());
     }
@@ -737,6 +790,37 @@ public class RepairService {
                         HttpStatus.NOT_FOUND,
                         "Device not found."
                 ));
+    }
+    
+    private boolean isTrackingCodeCollision(Throwable exception) {
+        Throwable cause = exception;
+
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation
+                    && "repair_jobs_tracking_code_key".equals(
+                            violation.getConstraintName())) {
+                return true;
+            }
+
+            cause = cause.getCause();
+        }
+
+        return false;
+    }
+    
+    private String generateAvailableTrackingCode() {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String code = trackingCodeGenerator.generate();
+
+            if (!repairJobRepository.existsByTrackingCode(code)) {
+                return code;
+            }
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Unable to generate a tracking code. Please try again."
+        );
     }
 
     private static String randomToken(int byteCount) {
