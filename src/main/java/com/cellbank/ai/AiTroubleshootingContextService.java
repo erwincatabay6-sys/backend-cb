@@ -32,6 +32,7 @@ import com.cellbank.repair.RepairPartUsage;
 import com.cellbank.repair.RepairPartUsageRepository;
 import com.cellbank.repair.RepairProblemCategory;
 import com.cellbank.repair.RepairStatus;
+import com.cellbank.repair.RepairAccessService;
 
 @Service
 @Transactional(readOnly = true)
@@ -44,6 +45,7 @@ public class AiTroubleshootingContextService {
     private final RepairPartUsageRepository partUsageRepository;
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
+    private final RepairAccessService repairAccessService;
 
     public AiTroubleshootingContextService(
             RepairJobRepository repairJobRepository,
@@ -51,7 +53,8 @@ public class AiTroubleshootingContextService {
             RepairFindingRepository findingRepository,
             RepairPartUsageRepository partUsageRepository,
             CurrentUserService currentUserService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            RepairAccessService repairAccessService) {
 
         this.repairJobRepository = repairJobRepository;
         this.deviceRepository = deviceRepository;
@@ -59,13 +62,14 @@ public class AiTroubleshootingContextService {
         this.partUsageRepository = partUsageRepository;
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
+        this.repairAccessService = repairAccessService;
     }
 
     public AiTroubleshootingContext buildContext(
             String username,
             Long repairId) {
 
-        requireAuthorizedUser(username);
+        User actingUser = requireAuthorizedUser(username);
 
         if (repairId == null || repairId <= 0) {
             throw new ResponseStatusException(
@@ -78,6 +82,8 @@ public class AiTroubleshootingContextService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Repair not found."));
+        
+        repairAccessService.requireRepairAccess(actingUser, currentRepair);
 
         Device device = deviceRepository
                 .findById(currentRepair.getDeviceId())
@@ -154,7 +160,7 @@ public class AiTroubleshootingContextService {
                 buildRepeatedProblems(eligibleDeviceRepairs));
     }
 
-    private void requireAuthorizedUser(String username) {
+    private User requireAuthorizedUser(String username) {
         Long userId = currentUserService
                 .getCurrentUser(username)
                 .id();
@@ -174,6 +180,7 @@ public class AiTroubleshootingContextService {
                     HttpStatus.FORBIDDEN,
                     "You do not have permission to use AI troubleshooting.");
         }
+        return user;
     }
 
     private Map<Long, List<FindingDetails>> loadFindings(

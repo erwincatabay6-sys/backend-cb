@@ -28,9 +28,13 @@ public class RepairFindingController {
 
     @GetMapping
     public List<RepairFindingResponse> getFindings(
+            Principal principal,
             @PathVariable("repairId") Long repairId) {
 
-        return findingService.getFindings(repairId);
+        return findingService.getFindings(
+                principal.getName(),
+                repairId
+        );
     }
 
     @PostMapping

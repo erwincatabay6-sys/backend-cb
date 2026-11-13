@@ -26,9 +26,13 @@ public class RepairPartController {
 
     @GetMapping
     public List<RepairPartResponse> getParts(
+            Principal principal,
             @PathVariable("repairId") Long repairId) {
 
-        return partService.getParts(repairId);
+        return partService.getParts(
+                principal.getName(),
+                repairId
+        );
     }
 
     @PostMapping

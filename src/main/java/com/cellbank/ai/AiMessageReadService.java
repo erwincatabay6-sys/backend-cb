@@ -16,6 +16,8 @@ import com.cellbank.auth.CurrentUserService;
 import com.cellbank.auth.User;
 import com.cellbank.auth.UserRepository;
 import com.cellbank.repair.RepairJobRepository;
+import com.cellbank.repair.RepairAccessService;
+import com.cellbank.repair.RepairJob;
 
 @Service
 @Transactional(readOnly = true)
@@ -27,19 +29,22 @@ public class AiMessageReadService {
     private final RepairJobRepository repairJobRepository;
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
+    private final RepairAccessService repairAccessService;
 
     public AiMessageReadService(
             AiMessageRepository messageRepository,
             AiMessageAttachmentRepository attachmentRepository,
             RepairJobRepository repairJobRepository,
             CurrentUserService currentUserService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            RepairAccessService repairAccessService) {
 
         this.messageRepository = messageRepository;
         this.attachmentRepository = attachmentRepository;
         this.repairJobRepository = repairJobRepository;
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
+        this.repairAccessService = repairAccessService;
     }
 
     public List<AiMessageResponse> getMessages(
@@ -164,11 +169,13 @@ public class AiMessageReadService {
 
         requirePositiveId(repairId, "repair");
 
-        if (!repairJobRepository.existsById(repairId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Repair not found.");
-        }
+        RepairJob repair = repairJobRepository.findById(repairId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Repair not found."
+                ));
+
+        repairAccessService.requireRepairAccess(user, repair);
     }
 
     private void requirePositiveId(Long id, String recordName) {

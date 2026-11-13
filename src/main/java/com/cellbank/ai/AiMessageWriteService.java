@@ -19,6 +19,7 @@ import com.cellbank.auth.UserRepository;
 import com.cellbank.repair.RepairJob;
 import com.cellbank.repair.RepairJobRepository;
 import com.cellbank.repair.RepairStatus;
+import com.cellbank.repair.RepairAccessService;
 
 @Service
 @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
@@ -30,6 +31,7 @@ public class AiMessageWriteService {
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
     private final AiMessageReadService readService;
+    private final RepairAccessService repairAccessService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -40,7 +42,8 @@ public class AiMessageWriteService {
             RepairJobRepository repairJobRepository,
             CurrentUserService currentUserService,
             UserRepository userRepository,
-            AiMessageReadService readService) {
+            AiMessageReadService readService,
+            RepairAccessService repairAccessService) {
 
         this.messageRepository = messageRepository;
         this.attachmentRepository = attachmentRepository;
@@ -48,15 +51,10 @@ public class AiMessageWriteService {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
         this.readService = readService;
+        this.repairAccessService = repairAccessService;
     }
 
-    /**
-     * Called after the provider returns a complete, validated reply.
-     * No OpenAI network call takes place inside this transaction.
-     *
-     * expectedLastMessageId comes from the backend's conversation snapshot.
-     * It is null when that snapshot contained no saved messages.
-     */
+    
     @Transactional
     public List<AiMessageResponse> saveExchange(
             String username,
@@ -66,7 +64,8 @@ public class AiMessageWriteService {
             List<ValidatedAttachment> attachments,
             AiAssistantReply reply) {
 
-        Long senderUserId = requireAuthorizedUser(username);
+    	User actingUser = requireAuthorizedUser(username);
+    	Long senderUserId = actingUser.getId();
 
         if (repairId == null || repairId <= 0) {
             throw new ResponseStatusException(
@@ -106,6 +105,8 @@ public class AiMessageWriteService {
                         "Repair not found."));
 
         entityManager.refresh(repair);
+        
+        repairAccessService.requireRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),
@@ -172,7 +173,7 @@ public class AiMessageWriteService {
         return readService.getMessages(username, repairId);
     }
 
-    private Long requireAuthorizedUser(String username) {
+    private User requireAuthorizedUser(String username) {
         Long userId = currentUserService
                 .getCurrentUser(username)
                 .id();
@@ -193,7 +194,7 @@ public class AiMessageWriteService {
                     "You do not have permission to use AI troubleshooting.");
         }
 
-        return userId;
+        return user;
     }
 
     private void validateMessage(

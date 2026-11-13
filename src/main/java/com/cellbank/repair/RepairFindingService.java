@@ -27,6 +27,7 @@ public class RepairFindingService {
     private final RepairJobRepository repairJobRepository;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
+    private final RepairAccessService repairAccessService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -35,22 +36,37 @@ public class RepairFindingService {
             RepairFindingRepository findingRepository,
             RepairJobRepository repairJobRepository,
             UserRepository userRepository,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            RepairAccessService repairAccessService) {
 
         this.findingRepository = findingRepository;
         this.repairJobRepository = repairJobRepository;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
+        this.repairAccessService = repairAccessService;
     }
 
-    public List<RepairFindingResponse> getFindings(Long repairId) {
+    public List<RepairFindingResponse> getFindings(
+            String username,
+            Long repairId) {
 
-        if (!repairJobRepository.existsById(repairId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Repair not found."
-            );
-        }
+        Long userId = currentUserService
+                .getCurrentUser(username)
+                .id();
+
+        User actingUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Your account could not be found."
+                ));
+
+        RepairJob repair = repairJobRepository.findById(repairId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Repair not found."
+                ));
+
+        repairAccessService.requireRepairAccess(actingUser, repair);
 
         List<RepairFinding> findings = findingRepository
                 .findByRepairJobIdOrderByRecordedAtDescIdDesc(repairId);
@@ -114,6 +130,8 @@ public class RepairFindingService {
                 ));
 
         entityManager.refresh(repair);
+        
+        repairAccessService.requireRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),
