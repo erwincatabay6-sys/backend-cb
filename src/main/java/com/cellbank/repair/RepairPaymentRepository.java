@@ -44,11 +44,18 @@ public interface RepairPaymentRepository
     """)
     List<RepairPaymentTotal> sumPaymentsByRepairIds(
     @Param("repairIds") List<Long> repairIds);
+    
+    long countByRecordedByIdAndPaidAtGreaterThanEqualAndPaidAtLessThan(
+    	        Long recordedById,
+    	        Instant startInclusive,
+    	        Instant endExclusive);
 
     interface RepairPaymentTotal {
 
     	Long getRepairJobId();
 
     	BigDecimal getTotalPaid();
+    	
+    	
 }
 }

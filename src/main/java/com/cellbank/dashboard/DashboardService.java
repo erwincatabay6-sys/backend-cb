@@ -8,7 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
+import com.cellbank.repair.RepairStatusHistoryRepository;
 import com.cellbank.auth.CurrentUserService;
 import com.cellbank.auth.User;
 import com.cellbank.auth.UserRepository;
@@ -48,6 +52,7 @@ public class DashboardService {
     private final UserRepository userRepository;
     private final DeviceRepository deviceRepository;
     private final CustomerRepository customerRepository;
+    private final RepairStatusHistoryRepository statusHistoryRepository;
 
     public DashboardService(
             CurrentUserService currentUserService,
@@ -55,7 +60,8 @@ public class DashboardService {
             RepairPaymentRepository paymentRepository,
             UserRepository userRepository,
             DeviceRepository deviceRepository,
-            CustomerRepository customerRepository) {
+            CustomerRepository customerRepository,
+            RepairStatusHistoryRepository statusHistoryRepository) {
 
         this.currentUserService = currentUserService;
         this.repairRepository = repairRepository;
@@ -63,6 +69,17 @@ public class DashboardService {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.customerRepository = customerRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+    }
+    
+    private String staffProfileImageUrl(User staff) {
+        String existingImageUrl = staff.getProfileImageUrl();
+
+        if (existingImageUrl == null || existingImageUrl.isBlank()) {
+            return null;
+        }
+
+        return "/api/staff/" + staff.getId() + "/profile-image";
     }
 
     public DashboardResponse getDashboard(String username) {
@@ -190,7 +207,13 @@ public class DashboardService {
 
         List<DashboardResponse.TechnicianWorkload> workload;
 
-        if (technicianOnly) {
+        if (!isAdmin && isTechnician) {
+            User technician = userRepository.findById(currentUser.id())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.FORBIDDEN,
+                            "Your account could not be found."
+                    ));
+
             workload = List.of(
                     new DashboardResponse.TechnicianWorkload(
                             currentUser.id(),
@@ -198,10 +221,11 @@ public class DashboardService {
                             activeByTechnician.getOrDefault(
                                     currentUser.id(), 0L),
                             totalByTechnician.getOrDefault(
-                                    currentUser.id(), 0L)
+                                    currentUser.id(), 0L),
+                            staffProfileImageUrl(technician)
                     )
             );
-        } else {
+        } else if (isAdmin){
             workload = userRepository
                     .findDistinctByStatusAndRoles_NameOrderByFullNameAscIdAsc(
                             UserStatus.ACTIVE,
@@ -215,10 +239,70 @@ public class DashboardService {
                                     activeByTechnician.getOrDefault(
                                             technician.getId(), 0L),
                                     totalByTechnician.getOrDefault(
-                                            technician.getId(), 0L)
+                                            technician.getId(), 0L),
+                                    staffProfileImageUrl(technician)
                             ))
                     .toList();
+        } else {
+        	workload = List.of();
         }
+        
+        ZoneId shopZone = ZoneId.of("Asia/Manila");
+        LocalDate activityDate = LocalDate.now(shopZone);
+
+        Instant startInclusive = activityDate
+                .atStartOfDay(shopZone)
+                .toInstant();
+
+        Instant endExclusive = activityDate
+                .plusDays(1)
+                .atStartOfDay(shopZone)
+                .toInstant();
+
+        List<User> activityStaff;
+
+        if (isAdmin) {
+            activityStaff = userRepository
+                    .findDistinctByStatusAndRoles_NameOrderByFullNameAscIdAsc(
+                            UserStatus.ACTIVE,
+                            "FRONT_DESK"
+                    );
+        } else if (isFrontDesk) {
+            User actingUser = userRepository.findById(currentUser.id())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.FORBIDDEN,
+                            "Your account could not be found."
+                    ));
+
+            activityStaff = List.of(actingUser);
+        } else {
+            activityStaff = List.of();
+        }
+
+        List<DashboardResponse.FrontDeskActivity> frontDeskActivity =
+                activityStaff.stream()
+                        .map(staff -> new DashboardResponse.FrontDeskActivity(
+                                staff.getId(),
+                                staff.getFullName(),
+                                repairRepository
+                                        .countByCreatedByIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                                                staff.getId(),
+                                                startInclusive,
+                                                endExclusive),
+                                paymentRepository
+                                        .countByRecordedByIdAndPaidAtGreaterThanEqualAndPaidAtLessThan(
+                                                staff.getId(),
+                                                startInclusive,
+                                                endExclusive),
+                                statusHistoryRepository
+                                        .countByChangedByIdAndNewStatusAndChangedAtGreaterThanEqualAndChangedAtLessThan(
+                                                staff.getId(),
+                                                RepairStatus.COMPLETED,
+                                                startInclusive,
+                                                endExclusive),
+                                        staffProfileImageUrl(staff)
+                        ))
+                        .toList();
 
         return new DashboardResponse(
                 technicianOnly,
@@ -233,7 +317,9 @@ public class DashboardService {
                         .map(repair -> toRepairItem(
                                 repair, devices, customers, technicianNames))
                         .toList(),
-                isAdmin ? calculateFinancialSnapshot(repairs) : null
+                        isAdmin ? calculateFinancialSnapshot(repairs) : null,
+                        		frontDeskActivity,
+                        		activityDate
         );
     }
 

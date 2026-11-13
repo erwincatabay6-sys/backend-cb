@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.cellbank.auth.CurrentUserService;
 
 @Service
 @Transactional(readOnly = true)
@@ -26,32 +27,48 @@ public class RepairHistoryService {
     private final DeviceRepository deviceRepository;
     private final RepairJobRepository repairJobRepository;
     private final UserRepository userRepository;
+    private final CurrentUserService currentUserService;
+    private final RepairAccessService repairAccessService;
 
     public RepairHistoryService(
             CustomerRepository customerRepository,
             DeviceRepository deviceRepository,
             RepairJobRepository repairJobRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            CurrentUserService currentUserService,
+            RepairAccessService repairAccessService) {
 
         this.customerRepository = customerRepository;
         this.deviceRepository = deviceRepository;
         this.repairJobRepository = repairJobRepository;
         this.userRepository = userRepository;
+        this.currentUserService = currentUserService;
+        this.repairAccessService = repairAccessService;
     }
 
-    public List<RepairResponse> getCustomerHistory(Long customerId) {
+    public List<RepairResponse> getCustomerHistory(
+            String username,
+            Long customerId) {
+
+        User actingUser = requireActingUser(username);
         requireCustomer(customerId);
 
-        return toResponses(
-                repairJobRepository.findCustomerRepairs(customerId),
-                customerId
-        );
+        List<RepairJob> repairs = repairJobRepository
+                .findCustomerRepairs(customerId)
+                .stream()
+                .filter(repair ->
+                        repairAccessService.canAccessRepair(actingUser, repair))
+                .toList();
+
+        return toResponses(repairs, customerId);
     }
 
     public List<RepairResponse> getDeviceHistory(
+            String username,
             Long customerId,
             Long deviceId) {
 
+        User actingUser = requireActingUser(username);
         requireCustomer(customerId);
 
         deviceRepository.findByIdAndCustomerId(deviceId, customerId)
@@ -60,11 +77,14 @@ public class RepairHistoryService {
                         "Device not found for this customer."
                 ));
 
-        return toResponses(
-                repairJobRepository
-                        .findByDeviceIdOrderByCreatedAtDescIdDesc(deviceId),
-                customerId
-        );
+        List<RepairJob> repairs = repairJobRepository
+                .findByDeviceIdOrderByCreatedAtDescIdDesc(deviceId)
+                .stream()
+                .filter(repair ->
+                        repairAccessService.canAccessRepair(actingUser, repair))
+                .toList();
+
+        return toResponses(repairs, customerId);
     }
 
     private List<RepairResponse> toResponses(
@@ -108,5 +128,16 @@ public class RepairHistoryService {
                     "Customer not found."
             );
         }
+    }
+    private User requireActingUser(String username) {
+        Long userId = currentUserService
+                .getCurrentUser(username)
+                .id();
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Your account could not be found."
+                ));
     }
 }

@@ -463,6 +463,16 @@ public class SecurityConfig {
                                 "TECHNICIAN",
                                 "FRONT_DESK"
                         )
+                        
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/staff/{staffId}/profile-image"
+                        )
+                        .hasAnyRole(
+                                "ADMIN",
+                                "TECHNICIAN",
+                                "FRONT_DESK"
+                        )
 
                         .anyRequest()
                         .denyAll()

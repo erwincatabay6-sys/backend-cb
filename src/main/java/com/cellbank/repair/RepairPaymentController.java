@@ -26,9 +26,13 @@ public class RepairPaymentController {
 
     @GetMapping
     public List<RepairPaymentResponse> getPayments(
+            Principal principal,
             @PathVariable("repairId") Long repairId) {
 
-        return paymentService.getPayments(repairId);
+        return paymentService.getPayments(
+                principal.getName(),
+                repairId
+        );
     }
 
     @PostMapping

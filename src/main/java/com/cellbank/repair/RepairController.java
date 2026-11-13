@@ -26,8 +26,8 @@ public class RepairController {
     }
 
     @GetMapping
-    public List<RepairResponse> getRepairs() {
-        return repairService.getRepairs();
+    public List<RepairResponse> getRepairs(Principal principal) {
+        return repairService.getRepairs(principal.getName());
     }
     
     @GetMapping("/technicians")
@@ -37,16 +37,24 @@ public class RepairController {
 
     @GetMapping("/{repairId}")
     public RepairResponse getRepair(
+            Principal principal,
             @PathVariable("repairId") Long repairId) {
 
-        return repairService.getRepair(repairId);
+        return repairService.getRepair(
+                principal.getName(),
+                repairId
+        );
     }
 
     @GetMapping("/{repairId}/status-history")
     public List<RepairStatusHistoryResponse> getStatusHistory(
+            Principal principal,
             @PathVariable("repairId") Long repairId) {
 
-        return repairService.getStatusHistory(repairId);
+        return repairService.getStatusHistory(
+                principal.getName(),
+                repairId
+        );
     }
 
     @PostMapping

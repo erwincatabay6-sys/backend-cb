@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import java.security.Principal;
 
 @RestController
 @RequestMapping("/api/customers")
@@ -25,15 +26,19 @@ public class CustomerController {
     }
 
     @GetMapping
-    public List<CustomerResponse> getCustomers() {
-        return customerService.getCustomers();
+    public List<CustomerResponse> getCustomers(Principal principal) {
+        return customerService.getCustomers(principal.getName());
     }
 
     @GetMapping("/{customerId}")
     public CustomerResponse getCustomer(
+            Principal principal,
             @PathVariable("customerId") Long customerId) {
 
-        return customerService.getCustomer(customerId);
+        return customerService.getCustomer(
+                principal.getName(),
+                customerId
+        );
     }
 
     @PostMapping

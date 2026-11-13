@@ -98,6 +98,67 @@ public class ProfileImageService {
 
         return image.getImageData();
     }
+    
+    @Transactional(readOnly = true)
+    public byte[] getStaffImage(String username, Long staffId) {
+
+        User actingUser = findActiveUser(username);
+
+        boolean isAdmin = actingUser.getRoles().stream()
+                .anyMatch(role -> "ADMIN".equals(role.getName()));
+
+        boolean isStaff = actingUser.getRoles().stream()
+                .anyMatch(role ->
+                        "TECHNICIAN".equals(role.getName())
+                                || "FRONT_DESK".equals(role.getName()));
+
+        if (!isAdmin && !isStaff) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not have permission to view staff photos."
+            );
+        }
+
+        if (staffId == null || staffId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "A valid staff ID is required."
+            );
+        }
+
+        if (!isAdmin && !actingUser.getId().equals(staffId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not have access to this staff photo."
+            );
+        }
+
+        User staff = userRepository.findById(staffId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Staff member not found."
+                ));
+
+        boolean eligibleStaff = staff.getRoles().stream()
+                .anyMatch(role ->
+                        "TECHNICIAN".equals(role.getName())
+                                || "FRONT_DESK".equals(role.getName()));
+
+        if (staff.getStatus() != UserStatus.ACTIVE || !eligibleStaff) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Staff member not found."
+            );
+        }
+
+        UserProfileImage image = imageRepository.findById(staffId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No profile picture has been uploaded."
+                ));
+
+        return image.getImageData();
+    }
 
     // -----------------------------
     // ACCOUNT VALIDATION

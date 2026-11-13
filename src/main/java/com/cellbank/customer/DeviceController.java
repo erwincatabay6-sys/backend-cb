@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import java.security.Principal;
 
 @RestController
 @RequestMapping("/api/customers/{customerId}/devices")
@@ -26,17 +27,26 @@ public class DeviceController {
 
     @GetMapping
     public List<DeviceResponse> getDevices(
+            Principal principal,
             @PathVariable("customerId") Long customerId) {
 
-        return deviceService.getDevices(customerId);
+        return deviceService.getDevices(
+                principal.getName(),
+                customerId
+        );
     }
 
     @GetMapping("/{deviceId}")
     public DeviceResponse getDevice(
+            Principal principal,
             @PathVariable("customerId") Long customerId,
             @PathVariable("deviceId") Long deviceId) {
 
-        return deviceService.getDevice(customerId, deviceId);
+        return deviceService.getDevice(
+                principal.getName(),
+                customerId,
+                deviceId
+        );
     }
 
     @PostMapping

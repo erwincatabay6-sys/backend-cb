@@ -5,6 +5,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import com.cellbank.auth.CurrentUserService;
 import com.cellbank.auth.User;
@@ -22,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
 
 @Service
 @Transactional(readOnly = true)
@@ -90,7 +92,21 @@ public class TechnicianService {
             String username,
             Long technicianId) {
 
-        requireAccess(username);
+    	requireAccess(username);
+
+    	var currentUser = currentUserService.getCurrentUser(username);
+
+    	boolean hasBroadAccess =
+    	        currentUser.roles().contains("ADMIN")
+    	                || currentUser.roles().contains("FRONT_DESK");
+
+    	if (!hasBroadAccess
+    	        && !Objects.equals(currentUser.id(), technicianId)) {
+    	    throw new ResponseStatusException(
+    	            HttpStatus.FORBIDDEN,
+    	            "You do not have access to this technician's repair details."
+    	    );
+    	}
 
         User technician = userRepository
                 .findByIdAndRoles_Name(technicianId, "TECHNICIAN")
