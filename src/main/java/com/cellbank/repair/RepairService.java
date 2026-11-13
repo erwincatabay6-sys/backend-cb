@@ -42,6 +42,7 @@ public class RepairService {
     private final CurrentUserService currentUserService;
     private final RepairPaymentRepository paymentRepository;
     private final RepairNotificationService repairNotificationService;
+    private final RepairAccessService repairAccessService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -53,7 +54,8 @@ public class RepairService {
             UserRepository userRepository,
             CurrentUserService currentUserService,
             RepairPaymentRepository paymentRepository,
-            RepairNotificationService repairNotificationService) {
+            RepairNotificationService repairNotificationService,
+            RepairAccessService repairAccessService) {
 
         this.repairJobRepository = repairJobRepository;
         this.historyRepository = historyRepository;
@@ -62,6 +64,7 @@ public class RepairService {
         this.currentUserService = currentUserService;
         this.paymentRepository = paymentRepository;
         this.repairNotificationService = repairNotificationService;
+        this.repairAccessService = repairAccessService;
     }
 
     public List<TechnicianOptionResponse> getTechnicianOptions() {
@@ -75,13 +78,43 @@ public class RepairService {
                 .toList();
     }
 
-    public List<RepairResponse> getRepairs() {
-        List<RepairJob> repairs = repairJobRepository.findAll(
-                Sort.by(
-                        Sort.Order.desc("createdAt"),
-                        Sort.Order.desc("id")
-                )
-        );
+    public List<RepairResponse> getRepairs(String username) {
+        Long userId = currentUserService
+                .getCurrentUser(username)
+                .id();
+
+        User actingUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Your account could not be found."
+                ));
+
+        List<RepairJob> repairs;
+
+        if (repairAccessService.hasBroadRepairAccess(actingUser)) {
+            repairs = repairJobRepository.findAll(
+                    Sort.by(
+                            Sort.Order.desc("createdAt"),
+                            Sort.Order.desc("id")
+                    )
+            );
+        } else {
+            boolean isTechnician = actingUser.getRoles().stream()
+                    .anyMatch(role ->
+                            "TECHNICIAN".equals(role.getName()));
+
+            if (!isTechnician) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "You do not have permission to view repairs."
+                );
+            }
+
+            repairs = repairJobRepository
+                    .findByAssignedTechnicianIdOrderByUpdatedAtDescIdDesc(
+                            userId
+                    );
+        }
 
         if (repairs.isEmpty()) {
             return List.of();
@@ -119,17 +152,25 @@ public class RepairService {
                 .toList();
     }
 
-    public RepairResponse getRepair(Long repairId) {
+    public RepairResponse getRepair(String username, Long repairId) {
+        User actingUser = requireActingUser(username);
         RepairJob repair = requireRepair(repairId);
+
+        repairAccessService.requireRepairAccess(actingUser, repair);
+
         Device device = requireDevice(repair.getDeviceId());
 
         return toResponse(repair, device.getCustomerId());
     }
 
     public List<RepairStatusHistoryResponse> getStatusHistory(
+            String username,
             Long repairId) {
 
-        requireRepair(repairId);
+        User actingUser = requireActingUser(username);
+        RepairJob repair = requireRepair(repairId);
+
+        repairAccessService.requireRepairAccess(actingUser, repair);
 
         List<RepairStatusHistory> history = historyRepository
                 .findByRepairJobIdOrderByChangedAtAscIdAsc(repairId);
@@ -230,6 +271,8 @@ public class RepairService {
                         "Repair not found."));
 
         entityManager.refresh(repair);
+        
+        repairAccessService.requireRepairAccess(actingUser, repair);
 
         if (!Objects.equals(repair.getUpdatedAt(), request.expectedUpdatedAt())) {
             throw new ResponseStatusException(
@@ -338,7 +381,7 @@ public class RepairService {
             Long repairId,
             RepairEstimateUpdateRequest request) {
 
-        currentUserService.getCurrentUser(username);
+    	User actingUser = requireActingUser(username);
 
         RepairJob repair = repairJobRepository
                 .findByIdForUpdate(repairId)
@@ -348,6 +391,8 @@ public class RepairService {
                 ));
 
         entityManager.refresh(repair);
+        
+        repairAccessService.requireRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),
@@ -491,6 +536,8 @@ public class RepairService {
                 ));
 
         entityManager.refresh(repair);
+        
+        repairAccessService.requireRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),
@@ -694,5 +741,16 @@ public class RepairService {
         return Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(bytes);
+    }
+    private User requireActingUser(String username) {
+        Long userId = currentUserService
+                .getCurrentUser(username)
+                .id();
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Your account could not be found."
+                ));
     }
 }
