@@ -132,7 +132,7 @@ public class RepairPartService {
 
         entityManager.refresh(repair);
         
-        repairAccessService.requireRepairAccess(actingUser, repair);
+        repairAccessService.requireTechnicalRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),

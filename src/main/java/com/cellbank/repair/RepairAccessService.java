@@ -41,6 +41,29 @@ public class RepairAccessService {
             );
         }
     }
+    
+    public void requireTechnicalRepairAccess(User user, RepairJob repair) {
+        boolean allowed = user != null
+                && repair != null
+                && (
+                        hasRole(user, "ADMIN")
+                        || (
+                                hasRole(user, "TECHNICIAN")
+                                && user.getId() != null
+                                && Objects.equals(
+                                        user.getId(),
+                                        repair.getAssignedTechnicianId()
+                                )
+                        )
+                );
+
+        if (!allowed) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Technical access requires assignment to this repair."
+            );
+        }
+    }
 
     private boolean hasRole(User user, String roleName) {
         return user != null

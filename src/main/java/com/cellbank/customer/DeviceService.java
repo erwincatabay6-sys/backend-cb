@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.cellbank.auth.CurrentUserService;
+import com.cellbank.auth.CurrentUserResponse;
 
 @Service
 @Transactional(readOnly = true)
@@ -13,33 +15,79 @@ public class DeviceService {
 
     private final DeviceRepository deviceRepository;
     private final CustomerRepository customerRepository;
+    private final CurrentUserService currentUserService;
 
     public DeviceService(
             DeviceRepository deviceRepository,
-            CustomerRepository customerRepository) {
+            CustomerRepository customerRepository,
+            CurrentUserService currentUserService) {
 
         this.deviceRepository = deviceRepository;
         this.customerRepository = customerRepository;
+        this.currentUserService = currentUserService;
     }
 
-    public List<DeviceResponse> getDevices(Long customerId) {
-        requireCustomer(customerId);
+    public List<DeviceResponse> getDevices(
+            String username,
+            Long customerId) {
 
-        return deviceRepository.findByCustomerIdOrderByIdAsc(customerId)
-                .stream()
+        var currentUser = currentUserService.getCurrentUser(username);
+        boolean broadAccess = hasBroadDeviceAccess(currentUser);
+
+        List<Device> devices;
+
+        if (broadAccess) {
+            requireCustomer(customerId);
+
+            devices = deviceRepository
+                    .findByCustomerIdOrderByIdAsc(customerId);
+        } else {
+            devices = deviceRepository
+                    .findCustomerDevicesAssignedToTechnician(
+                            customerId,
+                            currentUser.id()
+                    );
+
+            if (devices.isEmpty()) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Customer not found."
+                );
+            }
+        }
+
+        return devices.stream()
                 .map(DeviceResponse::from)
                 .toList();
     }
 
     public DeviceResponse getDevice(
+            String username,
             Long customerId,
             Long deviceId) {
 
-        requireCustomer(customerId);
+        var currentUser = currentUserService.getCurrentUser(username);
+        boolean broadAccess = hasBroadDeviceAccess(currentUser);
 
-        return DeviceResponse.from(
-                requireDevice(customerId, deviceId)
-        );
+        if (broadAccess) {
+            requireCustomer(customerId);
+
+            return DeviceResponse.from(
+                    requireDevice(customerId, deviceId)
+            );
+        }
+
+        Device device = deviceRepository.findAssignedDevice(
+                        customerId,
+                        deviceId,
+                        currentUser.id()
+                )
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Device not found for this customer."
+                ));
+
+        return DeviceResponse.from(device);
     }
 
     @Transactional
@@ -107,5 +155,19 @@ public class DeviceService {
                         HttpStatus.NOT_FOUND,
                         "Device not found for this customer."
                 ));
+    }
+    
+    private boolean hasBroadDeviceAccess(CurrentUserResponse user) {
+        boolean broadAccess = user.roles().contains("ADMIN")
+                || user.roles().contains("FRONT_DESK");
+
+        if (!broadAccess && !user.roles().contains("TECHNICIAN")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not have permission to view devices."
+            );
+        }
+
+        return broadAccess;
     }
 }

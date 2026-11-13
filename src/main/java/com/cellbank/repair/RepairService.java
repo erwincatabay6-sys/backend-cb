@@ -289,26 +289,31 @@ public class RepairService {
                     "Select a repair status.");
         }
 
-        boolean permittedByRole = actingUser.getRoles().stream()
-                .anyMatch(role -> {
-                    String roleName = role.getName();
+        boolean isAdmin = actingUser.getRoles().stream()
+                .anyMatch(role -> "ADMIN".equals(role.getName()));
 
-                    if ("ADMIN".equals(roleName)) {
-                        return true;
-                    }
+        boolean isFrontDesk = actingUser.getRoles().stream()
+                .anyMatch(role -> "FRONT_DESK".equals(role.getName()));
 
-                    return switch (newStatus) {
-                        case RECEIVED, COMPLETED, CANCELLED ->
-                                "FRONT_DESK".equals(roleName);
+        boolean isTechnician = actingUser.getRoles().stream()
+                .anyMatch(role -> "TECHNICIAN".equals(role.getName()));
 
-                        case AWAITING_APPROVAL ->
-                                "FRONT_DESK".equals(roleName)
-                                        || "TECHNICIAN".equals(roleName);
+        boolean isAssignedTechnician = isTechnician
+                && Objects.equals(
+                        actingUser.getId(),
+                        repair.getAssignedTechnicianId()
+                );
 
-                        case IN_PROGRESS, AWAITING_PARTS, READY_FOR_RELEASE ->
-                                "TECHNICIAN".equals(roleName);
-                    };
-                });
+        boolean permittedByRole = isAdmin || switch (newStatus) {
+            case RECEIVED, COMPLETED, CANCELLED ->
+                    isFrontDesk;
+
+            case AWAITING_APPROVAL ->
+                    isFrontDesk || isAssignedTechnician;
+
+            case IN_PROGRESS, AWAITING_PARTS, READY_FOR_RELEASE ->
+                    isAssignedTechnician;
+        };
 
         if (!permittedByRole) {
             throw new ResponseStatusException(
@@ -392,7 +397,7 @@ public class RepairService {
 
         entityManager.refresh(repair);
         
-        repairAccessService.requireRepairAccess(actingUser, repair);
+        repairAccessService.requireTechnicalRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),
@@ -537,7 +542,7 @@ public class RepairService {
 
         entityManager.refresh(repair);
         
-        repairAccessService.requireRepairAccess(actingUser, repair);
+        repairAccessService.requireTechnicalRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),

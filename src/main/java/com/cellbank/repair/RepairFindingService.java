@@ -66,7 +66,7 @@ public class RepairFindingService {
                         "Repair not found."
                 ));
 
-        repairAccessService.requireRepairAccess(actingUser, repair);
+        repairAccessService.requireTechnicalRepairAccess(actingUser, repair);
 
         List<RepairFinding> findings = findingRepository
                 .findByRepairJobIdOrderByRecordedAtDescIdDesc(repairId);
@@ -131,7 +131,7 @@ public class RepairFindingService {
 
         entityManager.refresh(repair);
         
-        repairAccessService.requireRepairAccess(actingUser, repair);
+        repairAccessService.requireTechnicalRepairAccess(actingUser, repair);
 
         if (!Objects.equals(
                 repair.getUpdatedAt(),

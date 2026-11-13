@@ -175,7 +175,7 @@ public class AiMessageReadService {
                         "Repair not found."
                 ));
 
-        repairAccessService.requireRepairAccess(user, repair);
+        repairAccessService.requireTechnicalRepairAccess(user, repair);
     }
 
     private void requirePositiveId(Long id, String recordName) {

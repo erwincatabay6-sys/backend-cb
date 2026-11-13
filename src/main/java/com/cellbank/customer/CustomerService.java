@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.cellbank.auth.CurrentUserService;
+import com.cellbank.auth.CurrentUserResponse;
 
 @Service
 @Transactional(readOnly = true)
@@ -17,23 +19,35 @@ public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final DeviceRepository deviceRepository;
+    private final CurrentUserService currentUserService;
 
     public CustomerService(
             CustomerRepository customerRepository,
-            DeviceRepository deviceRepository) {
+            DeviceRepository deviceRepository,
+            CurrentUserService currentUserService) {
 
         this.customerRepository = customerRepository;
         this.deviceRepository = deviceRepository;
+        this.currentUserService = currentUserService;
     }
 
-    public List<CustomerResponse> getCustomers() {
-        Sort sorting = Sort.by(
-                Sort.Order.asc("name").ignoreCase(),
-                Sort.Order.asc("id")
-        );
+    public List<CustomerResponse> getCustomers(String username) {
+        var currentUser = currentUserService.getCurrentUser(username);
+        boolean broadAccess = hasBroadCustomerAccess(currentUser);
 
-        List<Customer> customers =
-                customerRepository.findAll(sorting);
+        List<Customer> customers;
+
+        if (broadAccess) {
+            customers = customerRepository.findAll(
+                    Sort.by(
+                            Sort.Order.asc("name").ignoreCase(),
+                            Sort.Order.asc("id")
+                    )
+            );
+        } else {
+            customers = customerRepository
+                    .findCustomersAssignedToTechnician(currentUser.id());
+        }
 
         if (customers.isEmpty()) {
             return List.of();
@@ -43,10 +57,18 @@ public class CustomerService {
                 .map(Customer::getId)
                 .toList();
 
-        List<Device> devices =
-                deviceRepository.findByCustomerIdInOrderByIdAsc(
-                        customerIds
-                );
+        List<Device> devices;
+
+        if (broadAccess) {
+            devices = deviceRepository
+                    .findByCustomerIdInOrderByIdAsc(customerIds);
+        } else {
+            devices = deviceRepository
+                    .findDevicesAssignedToTechnicianForCustomers(
+                            customerIds,
+                            currentUser.id()
+                    );
+        }
 
         Map<Long, List<DeviceResponse>> devicesByCustomer =
                 new HashMap<>();
@@ -71,12 +93,42 @@ public class CustomerService {
                 .toList();
     }
 
-    public CustomerResponse getCustomer(Long customerId) {
+    public CustomerResponse getCustomer(
+            String username,
+            Long customerId) {
+
+        var currentUser = currentUserService.getCurrentUser(username);
+        boolean broadAccess = hasBroadCustomerAccess(currentUser);
+
+        if (broadAccess) {
+            Customer customer = requireCustomer(customerId);
+
+            return CustomerResponse.from(
+                    customer,
+                    getCustomerDevices(customerId)
+            );
+        }
+
+        List<Device> assignedDevices = deviceRepository
+                .findCustomerDevicesAssignedToTechnician(
+                        customerId,
+                        currentUser.id()
+                );
+
+        if (assignedDevices.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Customer not found."
+            );
+        }
+
         Customer customer = requireCustomer(customerId);
 
         return CustomerResponse.from(
                 customer,
-                getCustomerDevices(customerId)
+                assignedDevices.stream()
+                        .map(DeviceResponse::from)
+                        .toList()
         );
     }
 
@@ -131,5 +183,19 @@ public class CustomerService {
                         HttpStatus.NOT_FOUND,
                         "Customer not found."
                 ));
+    }
+    
+    private boolean hasBroadCustomerAccess(CurrentUserResponse user) {
+        boolean broadAccess = user.roles().contains("ADMIN")
+                || user.roles().contains("FRONT_DESK");
+
+        if (!broadAccess && !user.roles().contains("TECHNICIAN")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not have permission to view customers."
+            );
+        }
+
+        return broadAccess;
     }
 }

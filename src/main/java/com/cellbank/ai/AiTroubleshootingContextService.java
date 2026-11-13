@@ -83,7 +83,7 @@ public class AiTroubleshootingContextService {
                         HttpStatus.NOT_FOUND,
                         "Repair not found."));
         
-        repairAccessService.requireRepairAccess(actingUser, currentRepair);
+        repairAccessService.requireTechnicalRepairAccess(actingUser, currentRepair);
 
         Device device = deviceRepository
                 .findById(currentRepair.getDeviceId())
