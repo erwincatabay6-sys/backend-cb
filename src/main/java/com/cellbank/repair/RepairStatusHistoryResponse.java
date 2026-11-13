@@ -10,6 +10,7 @@ public record RepairStatusHistoryResponse(
         RepairStatus previousStatus,
         RepairStatus newStatus,
         String note,
+        String customerUpdate,
         Instant changedAt
 ) {
 
@@ -25,6 +26,7 @@ public record RepairStatusHistoryResponse(
                 history.getPreviousStatus(),
                 history.getNewStatus(),
                 history.getNote(),
+                history.getCustomerUpdate(),
                 history.getChangedAt()
         );
     }

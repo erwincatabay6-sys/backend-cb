@@ -41,6 +41,9 @@ public class RepairStatusHistory {
 
     @Column(name = "note", columnDefinition = "text", updatable = false)
     private String note;
+    
+    @Column(name = "customer_update", length = 2000, updatable = false)
+    private String customerUpdate;
 
     @Column(
             name = "changed_at",
@@ -60,11 +63,30 @@ public class RepairStatusHistory {
             RepairStatus newStatus,
             String note) {
 
+        this(
+                repairJobId,
+                changedById,
+                previousStatus,
+                newStatus,
+                note,
+                null
+        );
+    }
+
+    public RepairStatusHistory(
+            Long repairJobId,
+            Long changedById,
+            RepairStatus previousStatus,
+            RepairStatus newStatus,
+            String note,
+            String customerUpdate) {
+
         this.repairJobId = repairJobId;
         this.changedById = changedById;
         this.previousStatus = previousStatus;
         this.newStatus = newStatus;
         this.note = note;
+        this.customerUpdate = customerUpdate;
     }
 
     @PrePersist
@@ -94,6 +116,10 @@ public class RepairStatusHistory {
 
     public String getNote() {
         return note;
+    }
+    
+    public String getCustomerUpdate() {
+        return customerUpdate;
     }
 
     public Instant getChangedAt() {

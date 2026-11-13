@@ -79,4 +79,68 @@ public class RepairTrackingEmailService {
                 body
         );
     }
+    
+    public void sendReadyForRelease(
+            String recipient,
+            String customerName,
+            String repairReference,
+            String deviceDescription,
+            String trackingCode,
+            String customerUpdate) {
+
+        if (recipient == null || recipient.isBlank()) {
+            throw new IllegalArgumentException(
+                    "A customer email address is required."
+            );
+        }
+
+        String greetingName =
+                customerName == null || customerName.isBlank()
+                        ? "Customer"
+                        : customerName.strip();
+
+        String trackingLink = frontendUrl
+                + "/track?code="
+                + trackingCode;
+
+        String updateSection =
+                customerUpdate == null || customerUpdate.isBlank()
+                        ? ""
+                        : "Customer update:\n"
+                                + customerUpdate.strip()
+                                + "\n\n";
+
+        String subject = "Cellbank — Your device is ready for collection · "
+                + repairReference;
+
+        String body = """
+                Hello %s,
+
+                Your %s is ready for collection.
+
+                Repair reference: %s
+                Tracking code: %s
+
+                %sTrack your repair:
+                %s
+
+                Please contact Cellbank to arrange collection.
+                Check the tracking page for the latest status before visiting.
+
+                Keep your tracking link and code private, as they provide access to your repair's tracking information.
+
+                Thank you,
+                Cellbank
+                Repair Management System
+                """.formatted(
+                        greetingName,
+                        deviceDescription,
+                        repairReference,
+                        trackingCode,
+                        updateSection,
+                        trackingLink
+                );
+
+        emailService.send(recipient.strip(), subject, body);
+    }
 }

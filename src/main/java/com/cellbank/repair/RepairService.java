@@ -35,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.cellbank.tracking.TrackingCodeGenerator;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import com.cellbank.email.RepairReadyEmailEvent;
 
 @Service
 @Transactional(readOnly = true)
@@ -382,7 +383,10 @@ public class RepairService {
                         changedById,
                         previousStatus,
                         newStatus,
-                        request.note()));
+                        request.note(),
+                        request.customerUpdate()
+                )
+        );
 
         repairJobRepository.flush();
         entityManager.refresh(repair);
@@ -392,6 +396,31 @@ public class RepairService {
                 previousStatus,
                 changedById
         );
+
+        if (newStatus == RepairStatus.READY_FOR_RELEASE) {
+            Customer customer = customerRepository
+                    .findById(device.getCustomerId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Customer not found."
+                    ));
+
+            if (customer.getEmail() != null
+                    && !customer.getEmail().isBlank()) {
+
+                eventPublisher.publishEvent(
+                        new RepairReadyEmailEvent(
+                                repair.getId(),
+                                customer.getEmail(),
+                                customer.getName(),
+                                repair.getRepairReference(),
+                                device.getBrand() + " " + device.getModel(),
+                                repair.getTrackingCode(),
+                                request.customerUpdate()
+                        )
+                );
+            }
+        }
 
         return toResponse(repair, device.getCustomerId());
     }

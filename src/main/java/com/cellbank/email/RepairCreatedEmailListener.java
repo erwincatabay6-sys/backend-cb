@@ -27,6 +27,7 @@ public class RepairCreatedEmailListener {
                 || event.recipient().isBlank()) {
             return;
         }
+        
 
         try {
             trackingEmailService.sendRepairReceived(
@@ -41,6 +42,31 @@ public class RepairCreatedEmailListener {
             // email bodies, or SMTP exception messages.
             log.warn(
                     "Tracking email failed for repair {}. Failure type: {}",
+                    event.repairId(),
+                    exception.getClass().getSimpleName()
+            );
+        }
+    }
+    
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onRepairReady(RepairReadyEmailEvent event) {
+        if (event.recipient() == null
+                || event.recipient().isBlank()) {
+            return;
+        }
+
+        try {
+            trackingEmailService.sendReadyForRelease(
+                    event.recipient(),
+                    event.customerName(),
+                    event.repairReference(),
+                    event.deviceDescription(),
+                    event.trackingCode(),
+                    event.customerUpdate()
+            );
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Ready-for-release email failed for repair {}. Failure type: {}",
                     event.repairId(),
                     exception.getClass().getSimpleName()
             );

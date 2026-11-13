@@ -60,11 +60,12 @@ public class TrackingService {
                 .findByRepairJobIdOrderByChangedAtAscIdAsc(repair.getId());
 
         List<TrackingResponse.StatusEntry> entries = history.stream()
-                .map(entry -> new TrackingResponse.StatusEntry(
-                        entry.getNewStatus(),
-                        entry.getChangedAt(),
-                        describeStatus(entry.getNewStatus())
-                ))
+        		.map(entry -> new TrackingResponse.StatusEntry(
+        		        entry.getNewStatus(),
+        		        entry.getChangedAt(),
+        		        describeStatus(entry.getNewStatus()),
+        		        entry.getCustomerUpdate()
+        		))
                 .toList();
 
         Instant lastUpdated = history.isEmpty()
