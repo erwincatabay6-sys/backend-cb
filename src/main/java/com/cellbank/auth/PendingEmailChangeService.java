@@ -87,6 +87,19 @@ public class PendingEmailChangeService {
         pendingRepository.saveAndFlush(change);
         sendCode(address, code);
     }
+    
+    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public void cancelChange(Long userId) {
+        userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Staff account was not found."
+                ));
+
+        pendingRepository.findById(userId)
+                .ifPresent(pendingRepository::delete);
+    }
 
     @Transactional
     public void resendCode(Long userId) {
