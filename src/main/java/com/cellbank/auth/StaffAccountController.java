@@ -15,18 +15,22 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 @RestController
 @RequestMapping("/api/users")
 public class StaffAccountController {
 
-    private final StaffAccountService staffAccountService;
+	private final StaffAccountService staffAccountService;
+	private final PendingEmailChangeService pendingEmailChangeService;
 
-    public StaffAccountController(
-            StaffAccountService staffAccountService) {
+	public StaffAccountController(
+	        StaffAccountService staffAccountService,
+	        PendingEmailChangeService pendingEmailChangeService) {
 
-        this.staffAccountService = staffAccountService;
-    }
+	    this.staffAccountService = staffAccountService;
+	    this.pendingEmailChangeService = pendingEmailChangeService;
+	}
 
     @GetMapping
     public List<StaffAccountResponse> getStaffAccounts() {
@@ -58,5 +62,11 @@ public class StaffAccountController {
             @Valid @RequestBody UpdateStaffAccessRequest request) {
 
         return staffAccountService.updateStaffAccess(userId, request);
+    }
+    
+    @DeleteMapping("/{userId}/pending-email-change")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelPendingEmailChange(@PathVariable("userId") Long userId) {
+        pendingEmailChangeService.cancelChange(userId);
     }
 }
