@@ -16,6 +16,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @EntityGraph(attributePaths = "roles")
     @Query("select u from User u where lower(u.username) = lower(:username)")
     Optional<User> findByUsername(@Param("username") String username);
+    
+    @Query("""
+            select u.emailVerified
+            from User u
+            where lower(u.username) = lower(:username)
+              and u.status = :status
+            """)
+    Optional<Boolean> findEmailVerifiedByUsernameAndStatus(
+            @Param("username") String username,
+            @Param("status") UserStatus status
+    );
 
     @EntityGraph(attributePaths = "roles")
     @Query("select u from User u where lower(u.email) = lower(:email)")
