@@ -497,6 +497,19 @@ public class SecurityConfig {
                                 "TECHNICIAN",
                                 "FRONT_DESK"
                         )
+                        
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/auth/me/pending-email-change"
+                        )
+                        .hasAnyRole("ADMIN", "TECHNICIAN", "FRONT_DESK")
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/me/pending-email-change/resend",
+                                "/api/auth/me/pending-email-change/confirm"
+                        )
+                        .hasAnyRole("ADMIN", "TECHNICIAN", "FRONT_DESK")
 
                         .anyRequest()
                         .denyAll()

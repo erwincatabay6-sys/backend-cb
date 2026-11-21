@@ -30,4 +30,19 @@ public class EmailService {
 
         mailSender.send(message);
     }
+    
+    public void sendEmailChangeCode(String proposedEmail, String code) {
+        String body = """
+                Your Cellbank email change confirmation code is:
+
+                %s
+
+                Enter this code in your signed-in Cellbank account to confirm
+                this address as your new staff email.
+
+                If you were not expecting this message, you can ignore it.
+                """.formatted(code);
+
+        send(proposedEmail, "Cellbank — Confirm your new staff email", body);
+    }
 }
