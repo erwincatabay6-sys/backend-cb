@@ -32,7 +32,8 @@ public class StaffAccountService {
     private final PasswordResetTokenRepository tokenRepository;
     private final EntityManager entityManager;
     private final EmailVerificationTokenRepository verificationTokenRepository;
-
+    private final PendingEmailChangeService pendingEmailChangeService;
+    
     public StaffAccountService(
             UserRepository userRepository,
             RoleRepository roleRepository,
@@ -40,7 +41,8 @@ public class StaffAccountService {
             SessionInvalidationService sessionInvalidationService,
             PasswordResetTokenRepository tokenRepository,
             EntityManager entityManager,
-            EmailVerificationTokenRepository verificationTokenRepository) {
+            EmailVerificationTokenRepository verificationTokenRepository,
+            PendingEmailChangeService pendingEmailChangeService) {
 
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -49,6 +51,7 @@ public class StaffAccountService {
         this.tokenRepository = tokenRepository;
         this.entityManager = entityManager;
         this.verificationTokenRepository = verificationTokenRepository;
+        this.pendingEmailChangeService = pendingEmailChangeService;
     }
 
     // -----------------------------
@@ -186,25 +189,29 @@ public class StaffAccountService {
         boolean rolesChanged =
                 !previousRoles.equals(request.roles());
 
+        boolean correctingUnverifiedEmail = emailChanged && !user.isEmailVerified();
+
         user.setFullName(name);
         user.setUsername(username);
-        user.setEmail(email);
         user.setRoles(updatedRoles);
 
-        if (emailChanged) {
-            user.setEmailVerified(false);
+        if (correctingUnverifiedEmail) {
+            user.setEmail(email);
             invalidateUnusedAccountTokens(user.getId());
         }
 
         User savedUser = userRepository.saveAndFlush(user);
 
-        if (usernameChanged || emailChanged || rolesChanged) {
-            sessionInvalidationService.expireSessionsAfterCommit(
-                    previousUsername
-            );
+        if (emailChanged && savedUser.isEmailVerified()) {
+            pendingEmailChangeService.startChange(savedUser, email);
+        }
+
+        if (usernameChanged || correctingUnverifiedEmail || rolesChanged) {
+            sessionInvalidationService.expireSessionsAfterCommit(previousUsername);
         }
 
         return toResponse(savedUser);
+        
     }
 
     // -----------------------------

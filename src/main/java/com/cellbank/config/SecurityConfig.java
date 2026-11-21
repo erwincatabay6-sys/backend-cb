@@ -22,6 +22,8 @@ import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import com.cellbank.auth.UserRepository;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 @Configuration
 @EnableMethodSecurity
@@ -41,7 +43,8 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             SessionRegistry sessionRegistry,
-            AuthRateLimitService authRateLimitService) throws Exception {
+            AuthRateLimitService authRateLimitService,
+            UserRepository userRepository) throws Exception {
 
         http
                 .csrf(Customizer.withDefaults())
@@ -54,6 +57,11 @@ public class SecurityConfig {
                 .addFilterBefore(
                         new TrackingRateLimitFilter(authRateLimitService),
                         AuthRateLimitFilter.class
+                )
+                
+                .addFilterAfter(
+                        new VerifiedEmailFilter(userRepository),
+                        AuthorizationFilter.class
                 )
 
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -489,6 +497,19 @@ public class SecurityConfig {
                                 "TECHNICIAN",
                                 "FRONT_DESK"
                         )
+                        
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/auth/me/pending-email-change"
+                        )
+                        .hasAnyRole("ADMIN", "TECHNICIAN", "FRONT_DESK")
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/me/pending-email-change/resend",
+                                "/api/auth/me/pending-email-change/confirm"
+                        )
+                        .hasAnyRole("ADMIN", "TECHNICIAN", "FRONT_DESK")
 
                         .anyRequest()
                         .denyAll()
