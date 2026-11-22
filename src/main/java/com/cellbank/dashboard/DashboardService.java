@@ -159,7 +159,7 @@ public class DashboardService {
 
         List<RepairJob> recentActiveRepairs = repairs.stream()
                 .filter(DashboardService::isActive)
-                .limit(5)
+                .limit(10)
                 .toList();
 
         // Load the labels needed by the dashboard lists in batches.
